@@ -228,6 +228,118 @@ async def get_meeting_record(meeting_id: str, db: AsyncSession = Depends(get_db)
     }
 
 
+@router.get("/participants/all", summary="List all participants across meetings")
+async def list_all_participants(db: AsyncSession = Depends(get_db)) -> list[dict]:
+    """Returns all unique participants across the organizational memory."""
+    from app.models.participant import Participant
+
+    result = await db.execute(select(Participant).order_by(Participant.name))
+    participants = result.scalars().all()
+    return [
+        {
+            "id": p.id,
+            "name": p.name,
+            "email": p.email,
+            "role": p.role,
+            "meeting_id": p.meeting_id,
+        }
+        for p in participants
+    ]
+
+
+@router.post("/{meeting_id}/speaker/{speaker_id}/resolve", summary="Resolve speaker to a participant (Phase 3)")
+async def resolve_speaker(
+    meeting_id: str,
+    speaker_id: str,
+    body: dict,
+    db: AsyncSession = Depends(get_db),
+) -> dict:
+    """
+    Resolves a speaker label to a participant with HUMAN verification.
+    Applies human correction, creates immutable Evidence, invalidates downstream
+    stages (SEMANTIC/VALIDATION/ARTIFACTS) while preserving ASR and diarization (ADR-010).
+    """
+    from app.models.participant import Participant, Speaker
+    from app.models.review import ReviewItem
+    from app.pipeline.corrections import apply_human_correction
+
+    await _get_or_404(meeting_id, db)
+
+    spk_res = await db.execute(
+        select(Speaker).where(Speaker.id == speaker_id, Speaker.meeting_id == meeting_id)
+    )
+    spk = spk_res.scalar_one_or_none()
+    if not spk:
+        raise HTTPException(404, "Speaker not found")
+
+    old_resolved_id = spk.resolved_participant_id
+    participant_name = body.get("name", "").strip()
+    participant_role = body.get("role", "").strip()
+
+    # Find or create Participant
+    part = None
+    if body.get("participant_id"):
+        part_res = await db.execute(select(Participant).where(Participant.id == body["participant_id"]))
+        part = part_res.scalar_one_or_none()
+
+    if not part and participant_name:
+        part_res = await db.execute(
+            select(Participant).where(Participant.meeting_id == meeting_id, Participant.name == participant_name)
+        )
+        part = part_res.scalar_one_or_none()
+        if not part:
+            part = Participant(
+                id=str(uuid.uuid4()),
+                meeting_id=meeting_id,
+                name=participant_name,
+                role=participant_role or "Team Member",
+            )
+            db.add(part)
+            await db.flush()
+
+    if not part:
+        raise HTTPException(400, "Must provide valid participant_id or name")
+
+    spk.resolved_participant_id = part.id
+    spk.resolution_confidence = 1.0
+    spk.resolution_source = "HUMAN"
+
+    # Resolve any pending review items for this speaker
+    rev_res = await db.execute(
+        select(ReviewItem).where(
+            ReviewItem.meeting_id == meeting_id,
+            ReviewItem.type == "SPEAKER_IDENTITY",
+            ReviewItem.status == "PENDING",
+        )
+    )
+    for rev in rev_res.scalars().all():
+        rev.status = "RESOLVED"
+        rev.resolution = part.name
+
+    await db.commit()
+
+    # Apply human correction and artifact regeneration (ADR-008, ADR-011)
+    corr_res = await apply_human_correction(
+        db=db,
+        meeting_id=meeting_id,
+        target_type="SPEAKER",
+        target_id=speaker_id,
+        field="resolved_participant",
+        old_value=old_resolved_id or spk.label,
+        new_value=part.name,
+        origin_stage="IDENTITY",
+    )
+
+    return {
+        "speaker_id": speaker_id,
+        "resolved_to": part.name,
+        "participant_id": part.id,
+        "resolution_source": "HUMAN",
+        "confidence": 1.0,
+        "correction": corr_res,
+    }
+
+
 # ── Helpers ───────────────────────────────────────────────────────────────────
 
 async def _get_or_404(meeting_id: str, db: AsyncSession) -> Meeting:
