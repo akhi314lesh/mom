@@ -24,6 +24,7 @@ pip-wheel-metadata/
 .env.local
 .env.*.local
 !.env.example
+.mom_pids.json
 
 # Database
 *.db

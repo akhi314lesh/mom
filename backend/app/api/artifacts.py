@@ -104,13 +104,13 @@ async def generate_artifacts(meeting_id: str, db: AsyncSession = Depends(get_db)
     doc_abs_path = settings.artifact_storage / doc_rel_path
     DocxGenerator.generate(doc_abs_path, meeting_export)
 
-    # Check for existing artifact to update or create
+    # Check for existing DOCX artifact to update or create
     art_res = await db.execute(
         select(Artifact).where(Artifact.meeting_id == meeting_id, Artifact.type == ArtifactType.DOCX)
     )
-    art = art_res.scalars().first()
-    if not art:
-        art = Artifact(
+    doc_art = art_res.scalars().first()
+    if not doc_art:
+        doc_art = Artifact(
             id=str(uuid.uuid4()),
             meeting_id=meeting_id,
             type=ArtifactType.DOCX,
@@ -118,22 +118,51 @@ async def generate_artifacts(meeting_id: str, db: AsyncSession = Depends(get_db)
             path=doc_rel_path,
             file_size_bytes=doc_abs_path.stat().st_size,
         )
-        db.add(art)
+        db.add(doc_art)
     else:
-        art.status = ArtifactStatus.CURRENT
-        art.stale_since = None
-        art.stale_reason = None
-        art.file_size_bytes = doc_abs_path.stat().st_size
-        art.path = doc_rel_path
+        doc_art.status = ArtifactStatus.CURRENT
+        doc_art.stale_since = None
+        doc_art.stale_reason = None
+        doc_art.file_size_bytes = doc_abs_path.stat().st_size
+        doc_art.path = doc_rel_path
+
+    # Generate PDF Artifact
+    from app.artifacts.pdf_generator import PdfGenerator
+    pdf_filename = f"Minutes_of_Meeting_{meeting_id[:8]}.pdf"
+    pdf_rel_path = f"{meeting_id}/{pdf_filename}"
+    pdf_abs_path = settings.artifact_storage / pdf_rel_path
+    PdfGenerator.generate(pdf_abs_path, meeting_export)
+
+    pdf_res = await db.execute(
+        select(Artifact).where(Artifact.meeting_id == meeting_id, Artifact.type == ArtifactType.PDF)
+    )
+    pdf_art = pdf_res.scalars().first()
+    if not pdf_art:
+        pdf_art = Artifact(
+            id=str(uuid.uuid4()),
+            meeting_id=meeting_id,
+            type=ArtifactType.PDF,
+            status=ArtifactStatus.CURRENT,
+            path=pdf_rel_path,
+            file_size_bytes=pdf_abs_path.stat().st_size,
+        )
+        db.add(pdf_art)
+    else:
+        pdf_art.status = ArtifactStatus.CURRENT
+        pdf_art.stale_since = None
+        pdf_art.stale_reason = None
+        pdf_art.file_size_bytes = pdf_abs_path.stat().st_size
+        pdf_art.path = pdf_rel_path
 
     await db.commit()
 
     return {
         "meeting_id": meeting_id,
-        "artifact_id": art.id,
-        "type": ArtifactType.DOCX,
+        "artifact_id": doc_art.id,
+        "docx_artifact_id": doc_art.id,
+        "pdf_artifact_id": pdf_art.id,
+        "docx_path": doc_rel_path,
+        "pdf_path": pdf_rel_path,
         "status": ArtifactStatus.CURRENT,
-        "path": doc_rel_path,
-        "file_size_bytes": art.file_size_bytes,
-        "message": "Artifact regenerated successfully.",
+        "message": "DOCX and PDF artifacts generated successfully.",
     }

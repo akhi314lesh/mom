@@ -12,6 +12,7 @@ export default function NewMeeting() {
   const navigate = useNavigate()
   const [mode, setMode] = useState('IMPORT')
   const [title, setTitle] = useState('')
+  const [participants, setParticipants] = useState('')
   const [file, setFile] = useState<File | null>(null)
   const [privacy, setPrivacy] = useState('LOCAL')
   const [loading, setLoading] = useState(false)
@@ -20,6 +21,11 @@ export default function NewMeeting() {
 
   const handleCreate = async () => {
     setLoading(true)
+    const parsedParticipants = participants
+      .split(',')
+      .map(p => p.trim())
+      .filter(Boolean)
+
     try {
       if (mode === 'IMPORT' && file) {
         const formData = new FormData()
@@ -44,6 +50,7 @@ export default function NewMeeting() {
             title: title.trim() || 'Untitled Meeting',
             capture_mode: mode,
             privacy_mode: privacy,
+            participants: parsedParticipants,
           }),
         })
         if (res.ok) {
@@ -51,6 +58,9 @@ export default function NewMeeting() {
           // Automatically trigger pipeline if import mode
           if (mode === 'IMPORT') {
             await fetch(`http://localhost:8000/api/processing/${data.id}/run`, { method: 'POST' })
+          }
+          if (mode === 'OVERLAY') {
+            window.open(`/overlay/${data.id}`, 'MoMOverlay', 'width=440,height=680,top=100,left=100,resizable=yes')
           }
           navigate(`/meetings/${data.id}`)
           return
@@ -84,6 +94,22 @@ export default function NewMeeting() {
             value={title}
             onChange={e => setTitle(e.target.value)}
             placeholder="e.g. Backend Architecture Review"
+            style={{
+              width: '100%', padding: '10px 14px', borderRadius: 'var(--radius-md)',
+              background: 'var(--bg-elevated)', border: '1px solid var(--border)',
+              color: 'var(--text-primary)', fontSize: 'var(--text-sm)', outline: 'none',
+              fontFamily: 'var(--font-sans)',
+            }}
+          />
+        </div>
+        <div style={{ marginBottom: 16 }}>
+          <label style={{ display: 'block', fontSize: 'var(--text-xs)', fontWeight: 600, color: 'var(--text-muted)', marginBottom: 6, textTransform: 'uppercase' }}>
+            Participants (comma separated)
+          </label>
+          <input
+            value={participants}
+            onChange={e => setParticipants(e.target.value)}
+            placeholder="e.g. Akhilesh, Priya, Rahul, Rohan"
             style={{
               width: '100%', padding: '10px 14px', borderRadius: 'var(--radius-md)',
               background: 'var(--bg-elevated)', border: '1px solid var(--border)',

@@ -6,6 +6,41 @@
 
 ---
 
+## QUICK START
+
+### Windows (One-Click Launch)
+Double-click:
+```
+START_MOM.bat
+```
+or run in PowerShell:
+```powershell
+.\scripts\start.ps1
+```
+*The browser opens automatically at http://localhost:5173 once both FastAPI and Vite are responsive. Zero API keys, models, or cloud credentials required to explore.*
+
+### Troubleshooting & Diagnostics
+```powershell
+.\scripts\doctor.ps1
+```
+
+### Clean Service Shutdown
+Double-click:
+```
+STOP_MOM.bat
+```
+or run:
+```powershell
+.\scripts\stop.ps1
+```
+
+### Service Restart
+```powershell
+.\scripts\restart.ps1
+```
+
+---
+
 ## Quick Links
 
 | Document | Purpose |

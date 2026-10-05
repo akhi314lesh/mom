@@ -147,8 +147,37 @@ export default function MeetingWorkspace() {
       })
       if (res.ok) {
         const data = await res.json()
-        if (data.artifact_id) {
-          window.open(`http://localhost:8000/api/artifacts/${data.artifact_id}/download`, '_blank')
+        const docxId = data.docx_artifact_id || data.artifact_id
+        if (docxId) {
+          window.open(`http://localhost:8000/api/artifacts/${docxId}/download`, '_blank')
+          return
+        }
+      }
+    } catch {
+      alert('Backend offline. Start the backend with: uvicorn app.main:app --port 8000')
+    } finally {
+      setDownloading(false)
+    }
+  }
+
+  const handleDownloadPdf = async () => {
+    setDownloading(true)
+    try {
+      const pdf = (liveRecord?.artifacts || []).find((a: any) => a.type === 'PDF')
+      if (pdf) {
+        window.open(`http://localhost:8000/api/artifacts/${pdf.id}/download`, '_blank')
+        return
+      }
+
+      // Generate on-demand
+      const res = await fetch(`http://localhost:8000/api/artifacts/meeting/${meeting.id}/generate`, {
+        method: 'POST',
+      })
+      if (res.ok) {
+        const data = await res.json()
+        const pdfId = data.pdf_artifact_id || data.artifact_id
+        if (pdfId) {
+          window.open(`http://localhost:8000/api/artifacts/${pdfId}/download`, '_blank')
           return
         }
       }
@@ -406,9 +435,10 @@ export default function MeetingWorkspace() {
               </button>
               <button
                 className="btn btn-secondary btn-sm"
-                onClick={() => alert('PDF export available. DOCX ready for download.')}
+                onClick={handleDownloadPdf}
+                disabled={downloading}
               >
-                Download PDF
+                {downloading ? 'Preparing...' : 'Download PDF'}
               </button>
             </div>
           </div>

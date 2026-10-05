@@ -11,6 +11,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.database import get_db
 from app.models.meeting import Meeting, MeetingLifecycle, ProcessingStatus, CaptureMode, PrivacyMode
+from app.models.participant import Participant
 
 router = APIRouter()
 
@@ -43,6 +44,19 @@ async def create_meeting(body: dict, db: AsyncSession = Depends(get_db)) -> dict
         },
     )
     db.add(meeting)
+
+    for p in body.get("participants", []):
+        name = p if isinstance(p, str) else p.get("name")
+        if name:
+            part = Participant(
+                id=str(uuid.uuid4()),
+                meeting_id=meeting.id,
+                name=name,
+                role=p.get("role") if isinstance(p, dict) else None,
+                email=p.get("email") if isinstance(p, dict) else None,
+            )
+            db.add(part)
+
     await db.commit()
     await db.refresh(meeting)
     return _meeting_summary(meeting)
