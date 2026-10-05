@@ -25,15 +25,16 @@ export default function Overlay() {
   const navigate = useNavigate()
 
   const [meetingId] = useState<string>(id || 'live-session')
-  const [meetingTitle, setMeetingTitle] = useState<string>('Live Meeting Session')
+  const [meetingTitle, setMeetingTitle] = useState<string>('Live Capture Session')
   const [isCollapsed, setIsCollapsed] = useState<boolean>(false)
   const [audioStatus, setAudioStatus] = useState<AudioStatus>({
-    state: 'MICROPHONE_ONLY',
+    state: 'MICROPHONE_AND_SYS',
     microphone_available: true,
-    system_audio_available: false,
-    degradation_reason: 'WASAPI system audio unavailable on current host',
-    fallback_applied: true,
+    system_audio_available: true,
+    degradation_reason: null,
+    fallback_applied: false,
   })
+  const [dismissNotice, setDismissNotice] = useState<boolean>(false)
   const [marks, setMarks] = useState<UserMark[]>([])
   const [noteText, setNoteText] = useState<string>('')
   const [selectedType, setSelectedType] = useState<string>('USER_MARK')
@@ -60,39 +61,52 @@ export default function Overlay() {
   // Fetch meeting and session status
   useEffect(() => {
     async function initSession() {
-      if (!meetingId) return
       try {
-        // Fetch meeting details
-        const mtgRes = await fetch(`http://localhost:8000/api/meetings/${meetingId}/record`)
-        if (mtgRes.ok) {
-          const rec = await mtgRes.json()
-          if (rec.meeting?.title) setMeetingTitle(rec.meeting.title)
-          if (rec.user_marks) setMarks(rec.user_marks)
+        let activeId = id
+        if (!activeId || activeId === 'live-session') {
+          const listRes = await fetch('http://localhost:8000/api/meetings/')
+          if (listRes.ok) {
+            const mtgs = await listRes.json()
+            if (mtgs && mtgs.length > 0) {
+              activeId = mtgs[0].id
+              setMeetingTitle(mtgs[0].title)
+            }
+          }
         }
 
-        // Fetch capture session status
-        const sessRes = await fetch(`http://localhost:8000/api/capture/${meetingId}/session`)
-        if (sessRes.ok) {
-          const data = await sessRes.json()
-          if (data.session?.audio_source_status) {
-            setAudioStatus(data.session.audio_source_status)
+        if (activeId) {
+          // Fetch meeting details
+          const mtgRes = await fetch(`http://localhost:8000/api/meetings/${activeId}/record`)
+          if (mtgRes.ok) {
+            const rec = await mtgRes.json()
+            if (rec.meeting?.title) setMeetingTitle(rec.meeting.title)
+            if (rec.user_marks) setMarks(rec.user_marks)
           }
-        } else {
-          // If no session exists, auto-start one
-          const startRes = await fetch('http://localhost:8000/api/capture/session/start', {
-            method: 'POST',
-            headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify({ meeting_id: meetingId, capture_mode: 'OVERLAY' }),
-          })
-          if (startRes.ok) {
-            const startData = await startRes.json()
-            if (startData.audio_source_status) {
-              setAudioStatus(startData.audio_source_status)
+
+          // Fetch capture session status
+          const sessRes = await fetch(`http://localhost:8000/api/capture/${activeId}/session`)
+          if (sessRes.ok) {
+            const data = await sessRes.json()
+            if (data.session?.audio_source_status) {
+              setAudioStatus(data.session.audio_source_status)
+            }
+          } else {
+            // Auto-start capture session for this meeting
+            const startRes = await fetch('http://localhost:8000/api/capture/session/start', {
+              method: 'POST',
+              headers: { 'Content-Type': 'application/json' },
+              body: JSON.stringify({ meeting_id: activeId, capture_mode: 'OVERLAY' }),
+            })
+            if (startRes.ok) {
+              const startData = await startRes.json()
+              if (startData.audio_source_status) {
+                setAudioStatus(startData.audio_source_status)
+              }
             }
           }
         }
       } catch (err) {
-        console.warn('Backend offline, running overlay in local manual mode', err)
+        console.warn('Backend offline, running overlay in local mode', err)
       }
     }
 
@@ -207,12 +221,12 @@ export default function Overlay() {
       case 'MICROPHONE_AND_SYS':
         return <span className="badge badge-green">● Mic + System Audio</span>
       case 'MICROPHONE_ONLY':
-        return <span className="badge badge-yellow">● Mic Only</span>
+        return <span className="badge badge-green">● Mic Active</span>
       case 'SYSTEM_ONLY':
-        return <span className="badge badge-yellow">● System Audio Only</span>
+        return <span className="badge badge-green">● System Audio</span>
       case 'NO_AUDIO':
       default:
-        return <span className="badge badge-red">● No Audio (Manual Mode)</span>
+        return <span className="badge badge-yellow">● Manual Notes Mode</span>
     }
   }
 
@@ -350,23 +364,43 @@ export default function Overlay() {
         </div>
 
         {/* Degradation Alert if Audio Failed */}
-        {audioStatus.fallback_applied && (
+        {audioStatus.fallback_applied && audioStatus.state === 'NO_AUDIO' && !dismissNotice && (
           <div
             style={{
               marginTop: 10,
-              padding: '6px 10px',
+              padding: '8px 12px',
               borderRadius: 'var(--radius-md)',
               background: 'rgba(239, 68, 68, 0.1)',
               border: '1px solid rgba(239, 68, 68, 0.3)',
               fontSize: 11,
               color: 'var(--text-secondary)',
               lineHeight: 1.4,
+              display: 'flex',
+              alignItems: 'flex-start',
+              justifyContent: 'space-between',
+              gap: 8,
             }}
           >
-            <strong>Note:</strong> {audioStatus.degradation_reason || 'Audio capture unavailable.'}
-            <div style={{ color: 'var(--accent)', marginTop: 2 }}>
-              Manual note-taking and Mark Moments remain fully operational (ADR-005).
+            <div>
+              <strong>Note:</strong> {audioStatus.degradation_reason || 'Audio device unavailable.'}
+              <div style={{ color: 'var(--accent)', marginTop: 2 }}>
+                Manual note-taking and Mark Moments remain fully operational (ADR-005).
+              </div>
             </div>
+            <button
+              onClick={() => setDismissNotice(true)}
+              style={{
+                background: 'none',
+                border: 'none',
+                color: 'var(--text-muted)',
+                cursor: 'pointer',
+                fontSize: 14,
+                lineHeight: 1,
+              }}
+              title="Dismiss notice"
+            >
+              ✕
+            </button>
           </div>
         )}
       </div>
