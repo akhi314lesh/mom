@@ -86,6 +86,7 @@ async def get_meeting_record(meeting_id: str, db: AsyncSession = Depends(get_db)
     from app.models.review import ReviewItem
     from app.models.artifacts import Artifact
     from app.models.evidence import Evidence
+    from app.models.marks import UserMark
 
     meeting = await _get_or_404(meeting_id, db)
 
@@ -102,6 +103,9 @@ async def get_meeting_record(meeting_id: str, db: AsyncSession = Depends(get_db)
     revs_res = await db.execute(select(ReviewItem).where(ReviewItem.meeting_id == meeting_id))
     arts_res = await db.execute(select(Artifact).where(Artifact.meeting_id == meeting_id))
     evs_res = await db.execute(select(Evidence).where(Evidence.meeting_id == meeting_id))
+    marks_res = await db.execute(
+        select(UserMark).where(UserMark.meeting_id == meeting_id).order_by(UserMark.timestamp_ms)
+    )
 
     participants = parts_res.scalars().all()
     part_name_map = {p.id: p.name for p in participants}
@@ -204,6 +208,22 @@ async def get_meeting_record(meeting_id: str, db: AsyncSession = Depends(get_db)
         for e in evs_res.scalars().all()
     ]
 
+    user_marks_list = [
+        {
+            "id": m.id,
+            "meeting_id": m.meeting_id,
+            "capture_session_id": m.capture_session_id,
+            "timestamp_ms": m.timestamp_ms,
+            "wall_clock_time": m.wall_clock_time.isoformat() if m.wall_clock_time else None,
+            "event_type": m.event_type,
+            "optional_text": m.optional_text,
+            "source": m.source,
+            "processing_priority": m.processing_priority,
+            "created_at": m.created_at.isoformat() if m.created_at else None,
+        }
+        for m in marks_res.scalars().all()
+    ]
+
     return {
         "meeting": _meeting_summary(meeting),
         "participants": [{"id": p.id, "name": p.name, "role": p.role} for p in participants],
@@ -219,6 +239,7 @@ async def get_meeting_record(meeting_id: str, db: AsyncSession = Depends(get_db)
         ],
         "transcript": transcript_list,
         "evidence": evidence_list,
+        "user_marks": user_marks_list,
         "decisions": decisions_list,
         "action_items": actions_list,
         "questions": questions_list,

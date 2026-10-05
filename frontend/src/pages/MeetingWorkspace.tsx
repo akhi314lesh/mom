@@ -65,6 +65,18 @@ export default function MeetingWorkspace() {
             fetchRecord()
             if (msg.status === 'COMPLETED') setPipelineProgress(null)
           }
+          if (msg.type === 'USER_MARK' && msg.mark) {
+            setLiveRecord((prev: any) => {
+              if (!prev) return prev
+              const existingMarks = prev.user_marks || []
+              if (existingMarks.some((m: any) => m.id === msg.mark.id)) return prev
+              return {
+                ...prev,
+                user_marks: [...existingMarks, msg.mark],
+                evidence: msg.evidence ? [...(prev.evidence || []), msg.evidence] : prev.evidence,
+              }
+            })
+          }
         } catch {}
       }
     } catch {}
@@ -87,6 +99,8 @@ export default function MeetingWorkspace() {
     liveRecord?.action_items && liveRecord.action_items.length > 0
       ? liveRecord.action_items
       : MOCK_ACTIONS.filter((a) => a.originating_meeting_id === meeting.id || meeting.id === 'mtg-001')
+
+  const userMarks = liveRecord?.user_marks ?? []
 
   const transcript =
     liveRecord?.transcript && liveRecord.transcript.length > 0
@@ -141,6 +155,23 @@ export default function MeetingWorkspace() {
   // Selected evidence lookup
   const selectedEvidence = (() => {
     if (!evidenceTarget) return null
+
+    // Check user marks first
+    const markMatch = userMarks.find((m: any) => m.id === evidenceTarget)
+    if (markMatch) {
+      const evMatch = (liveRecord?.evidence || []).find(
+        (e: any) => e.user_mark_id === markMatch.id || e.id === markMatch.id
+      )
+      return {
+        source_type: 'USER_MARK',
+        source_modality: 'TEXT',
+        raw_text: evMatch?.raw_text || markMatch.optional_text || `[${markMatch.event_type}] User marked key moment`,
+        confidence: 1.0,
+        timestamp_ms: markMatch.timestamp_ms || 0,
+        speaker: 'Human Participant (Keyboard / Desktop Overlay)',
+      }
+    }
+
     const allItems = [...decisions, ...actions]
     const targetItem = allItems.find((i: any) => i.id === evidenceTarget)
     const targetEvId = targetItem?.evidence_ids?.[0] || evidenceTarget
@@ -222,6 +253,13 @@ export default function MeetingWorkspace() {
             </div>
             <div className="flex gap-2">
               <button
+                className="btn btn-primary btn-sm"
+                onClick={() => window.open(`/overlay/${meeting.id}`, 'MoMOverlay', 'width=440,height=680,top=100,left=100,resizable=yes')}
+                title="Open floating overlay shell (ADR-005)"
+              >
+                ⚡ Launch Desktop Overlay
+              </button>
+              <button
                 className="btn btn-secondary btn-sm"
                 onClick={handleDownloadDocx}
                 disabled={downloading}
@@ -294,7 +332,7 @@ export default function MeetingWorkspace() {
             Transcript ({transcript.length})
           </button>
           <button className={`tab-btn ${tab === 'timeline' ? 'active' : ''}`} onClick={() => setTab('timeline')}>
-            Timeline
+            Timeline ({decisions.length + actions.length + userMarks.length})
           </button>
         </div>
 
@@ -492,24 +530,126 @@ export default function MeetingWorkspace() {
 
           {tab === 'timeline' && (
             <div>
-              <div className="timeline">
-                {decisions.map((d: any) => (
-                  <div key={d.id} className="timeline-item decision">
-                    <div className="timeline-time">{formatMs(18000)}</div>
-                    <div className="timeline-text">
-                      <strong>Decision:</strong> {d.text}
-                    </div>
-                  </div>
-                ))}
-                {actions.map((a: any) => (
-                  <div key={a.id} className="timeline-item action">
-                    <div className="timeline-time">{formatMs(58000)}</div>
-                    <div className="timeline-text">
-                      <strong>Action:</strong> {a.task} ({a.owner || 'Unassigned'})
-                    </div>
-                  </div>
-                ))}
+              <div
+                className="flex items-center justify-between mb-4 p-3"
+                style={{
+                  background: 'var(--bg-elevated)',
+                  borderRadius: 'var(--radius-md)',
+                  border: '1px solid var(--border)',
+                }}
+              >
+                <div style={{ fontSize: 'var(--text-xs)', color: 'var(--text-secondary)' }}>
+                  Chronological Timeline: Decisions, Actions, and Live Marked Moments (Ctrl+Shift+M).
+                </div>
+                <button
+                  className="btn btn-primary btn-sm"
+                  onClick={() =>
+                    window.open(
+                      `/overlay/${meeting.id}`,
+                      'MoMOverlay',
+                      'width=440,height=680,top=100,left=100,resizable=yes'
+                    )
+                  }
+                >
+                  ⚡ Open Overlay
+                </button>
               </div>
+
+              {decisions.length === 0 && actions.length === 0 && userMarks.length === 0 ? (
+                <div
+                  style={{
+                    padding: '32px 16px',
+                    textAlign: 'center',
+                    color: 'var(--text-muted)',
+                    fontSize: 'var(--text-sm)',
+                    border: '1px dashed var(--border)',
+                    borderRadius: 'var(--radius-md)',
+                  }}
+                >
+                  No timeline events recorded yet. Launch the Desktop Overlay or press Ctrl+Shift+M to mark moments!
+                </div>
+              ) : (
+                <div className="timeline">
+                  {[
+                    ...userMarks.map((m: any) => ({
+                      id: m.id,
+                      kind: 'USER_MARK',
+                      type: m.event_type,
+                      time_ms: m.timestamp_ms || 0,
+                      title: m.event_type,
+                      text: m.optional_text || 'User marked key moment',
+                      author: 'HUMAN',
+                      priority: m.processing_priority,
+                    })),
+                    ...decisions.map((d: any) => ({
+                      id: d.id,
+                      kind: 'DECISION',
+                      type: 'DECISION',
+                      time_ms: d.originating_timestamp_ms || 18000,
+                      title: 'Decision',
+                      text: d.text,
+                      author: 'AI Extracted',
+                      confidence: d.confidence,
+                    })),
+                    ...actions.map((a: any) => ({
+                      id: a.id,
+                      kind: 'ACTION',
+                      type: 'ACTION',
+                      time_ms: a.originating_timestamp_ms || 58000,
+                      title: `Action: ${a.owner || 'Unassigned'}`,
+                      text: a.task,
+                      author: 'AI Extracted',
+                      confidence: a.confidence,
+                    })),
+                  ]
+                    .sort((a, b) => a.time_ms - b.time_ms)
+                    .map((item) => {
+                      let itemClass = 'timeline-item'
+                      let badgeClass = 'badge-blue'
+                      if (item.kind === 'DECISION' || item.type === 'DECISION') {
+                        itemClass = 'timeline-item decision'
+                        badgeClass = 'badge-green'
+                      } else if (item.kind === 'ACTION' || item.type === 'ACTION') {
+                        itemClass = 'timeline-item action'
+                        badgeClass = 'badge-blue'
+                      } else if (item.type === 'FLAG') {
+                        itemClass = 'timeline-item'
+                        badgeClass = 'badge-red'
+                      } else if (item.type === 'NOTE') {
+                        itemClass = 'timeline-item'
+                        badgeClass = 'badge-yellow'
+                      }
+
+                      return (
+                        <div key={item.id} className={itemClass} style={{ position: 'relative' }}>
+                          <div className="flex items-center gap-2 mb-1">
+                            <div className="timeline-time">{formatMs(item.time_ms)}</div>
+                            <span className={`badge ${badgeClass}`} style={{ fontSize: 10 }}>
+                              {item.title}
+                            </span>
+                            {item.author === 'HUMAN' && (
+                              <span className="badge badge-yellow" style={{ fontSize: 9 }}>
+                                👤 HUMAN (Pri: {item.priority ?? 1.0})
+                              </span>
+                            )}
+                            <div className="ml-auto">
+                              <button
+                                className="evidence-link"
+                                style={{ fontSize: 11 }}
+                                onClick={() => setEvidenceTarget(item.id)}
+                              >
+                                📎 View evidence
+                              </button>
+                            </div>
+                          </div>
+                          <div className="timeline-text" style={{ fontSize: 'var(--text-xs)', marginTop: 2 }}>
+                            {item.text}
+                          </div>
+                        </div>
+                      )
+                    })}
+                </div>
+              )}
             </div>
           )}
         </div>

@@ -26,4 +26,15 @@ async def get_evidence_item(meeting_id: str, evidence_id: str, db: AsyncSession 
     e = result.scalar_one_or_none()
     if not e:
         return {"error": "Evidence not found"}
-    return {"id": e.id, "source_type": e.source_type, "raw_text": e.raw_text, "confidence": e.confidence, "timestamp_ms": e.timestamp_ms}
+    return {
+        "id": e.id,
+        "meeting_id": e.meeting_id,
+        "source_type": e.source_type,
+        "source_modality": e.source_modality,
+        "raw_text": e.raw_text,
+        "confidence": e.confidence,
+        "timestamp_ms": e.timestamp_ms,
+        "is_immutable": e.is_immutable,
+        "segment_id": e.segment_id,
+        "user_mark_id": e.user_mark_id,
+    }

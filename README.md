@@ -75,7 +75,18 @@ npm run dev                     # starts at http://localhost:5173
 
 ## Current Phase
 
-**Phase 0 — Scaffold + Domain Model + Documentation**
+**Phase 4 — Desktop Overlay + Mark Moment + Capture Controllers**
+
+Features implemented:
+- Full 22 ORM entity models with async SQLite/PostgreSQL layer
+- Progressive processing pipeline (ASR → Diarization → Identity → Semantic Extraction → Artifacts)
+- Evidence provenance chain & Human Correction Engine (ADR-008, ADR-010, ADR-011)
+- DOCX Artifact generation from canonical `MeetingRecord`
+- People Directory with speaker attribution and participant resolution
+- Standalone Desktop Overlay Shell with always-on-top pywebview/browser launcher (`desktop/overlay_launcher.py`)
+- Hardware-adaptive Capture Controllers (`MicCaptureController`, `SystemAudioController`, `ManualEventController`) with graceful degradation to `NO_AUDIO` mode
+- Mark Moment engine (`Ctrl+Shift+M`) generating immutable `Evidence` (`source="HUMAN"`, `confidence=1.0`, `priority=1.0`)
+- Chronological timeline combining user marks, decisions, and action items in real-time via WebSocket
 
 See [CAPABILITIES.md](docs/CAPABILITIES.md) for what is currently operational.
 

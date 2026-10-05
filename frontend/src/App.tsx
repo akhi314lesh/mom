@@ -9,6 +9,7 @@ import People from './pages/People'
 import Knowledge from './pages/Knowledge'
 import Settings from './pages/Settings'
 import AgentConsole from './pages/AgentConsole'
+import Overlay from './pages/Overlay'
 import './index.css'
 
 const NAV = [
@@ -54,10 +55,10 @@ function Sidebar() {
       </div>
       <div style={{ padding: '12px 16px', borderTop: '1px solid var(--border)' }}>
         <div style={{ fontSize: 'var(--text-xs)', color: 'var(--text-muted)' }}>
-          Phase 0 · Scaffold
+          Phase 4 · Overlay + Mark Moment
         </div>
         <div style={{ fontSize: 'var(--text-xs)', color: 'var(--text-muted)', marginTop: 2 }}>
-          LLM: stub · ASR: stub
+          Hotkey: Ctrl+Shift+M · Audio: adaptive
         </div>
       </div>
     </nav>
@@ -90,29 +91,47 @@ function TopBar() {
   )
 }
 
+function AppContent() {
+  const location = useLocation()
+  const isOverlay = location.pathname.startsWith('/overlay')
+
+  if (isOverlay) {
+    return (
+      <Routes>
+        <Route path="/overlay" element={<Overlay />} />
+        <Route path="/overlay/:id" element={<Overlay />} />
+      </Routes>
+    )
+  }
+
+  return (
+    <div className="app-shell">
+      <Sidebar />
+      <div className="main-content">
+        <TopBar />
+        <div className="page-content">
+          <Routes>
+            <Route path="/" element={<Dashboard />} />
+            <Route path="/meetings" element={<Meetings />} />
+            <Route path="/meetings/new" element={<NewMeeting />} />
+            <Route path="/meetings/:id" element={<MeetingWorkspace />} />
+            <Route path="/actions" element={<ActionItems />} />
+            <Route path="/decisions" element={<Decisions />} />
+            <Route path="/people" element={<People />} />
+            <Route path="/knowledge" element={<Knowledge />} />
+            <Route path="/agent" element={<AgentConsole />} />
+            <Route path="/settings" element={<Settings />} />
+          </Routes>
+        </div>
+      </div>
+    </div>
+  )
+}
+
 function App() {
   return (
     <BrowserRouter>
-      <div className="app-shell">
-        <Sidebar />
-        <div className="main-content">
-          <TopBar />
-          <div className="page-content">
-            <Routes>
-              <Route path="/" element={<Dashboard />} />
-              <Route path="/meetings" element={<Meetings />} />
-              <Route path="/meetings/new" element={<NewMeeting />} />
-              <Route path="/meetings/:id" element={<MeetingWorkspace />} />
-              <Route path="/actions" element={<ActionItems />} />
-              <Route path="/decisions" element={<Decisions />} />
-              <Route path="/people" element={<People />} />
-              <Route path="/knowledge" element={<Knowledge />} />
-              <Route path="/agent" element={<AgentConsole />} />
-              <Route path="/settings" element={<Settings />} />
-            </Routes>
-          </div>
-        </div>
-      </div>
+      <AppContent />
     </BrowserRouter>
   )
 }

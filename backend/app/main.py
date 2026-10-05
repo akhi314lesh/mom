@@ -71,6 +71,7 @@ app.include_router(artifacts.router, prefix="/api/artifacts", tags=["Artifacts"]
 app.include_router(query.router, prefix="/api/query", tags=["Query"])
 app.include_router(agent_console.router, prefix="/api/agent", tags=["Agent Console"])
 app.include_router(ws.router, prefix="/ws", tags=["WebSocket"])
+app.include_router(ws.router, prefix="/api/ws", tags=["WebSocket"])
 
 
 @app.get("/health")
