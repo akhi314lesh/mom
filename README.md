@@ -75,7 +75,7 @@ npm run dev                     # starts at http://localhost:5173
 
 ## Current Phase
 
-**Phase 7 — Ask the Meeting (Natural Language Queries + Evidence Grounding)**
+**Phase 8 — External Integrations (Calendar Sync, Pre-Meeting Briefs, Task Export)**
 
 Features implemented:
 - Full 22 ORM entity models with async SQLite/PostgreSQL layer
@@ -97,6 +97,11 @@ Features implemented:
 - Strict Evidence Grounding Invariant: Every answer is strictly grounded in retrieved evidence; ungrounded questions return `grounded=False`, `confidence=0.0`, with explicit statement of missing evidence (zero hallucination)
 - Structured `MeetingQueryAnswer` schema with rich `AnswerSource[]` citations
 - Interactive "Ask the Meeting" UI in `MeetingWorkspace.tsx`: instant query bar, suggested question chips, grounded status badges, and clickable citation links to inspect evidence
+- Bi-directional Calendar Synchronization: Google Calendar API v3 and Microsoft Graph / Outlook adapters with live & sandbox modes
+- Pre-Meeting Intelligence Brief Generator (`backend/app/integrations/calendar/brief_generator.py`): analyzes attendees, titles, prior meeting history, and open action items to auto-generate canonical `MeetingBrief` entities
+- Action Item Task Export Adapters: 1-click export to Atlassian Jira (`MOM-XXX`), GitHub Issues (`#XX`), and Linear (`MOM-XX`) with verbatim evidence citations and back-links
+- Integrations Management UI (`frontend/src/pages/Integrations.tsx`): multi-provider configuration, connection test matrix, and upcoming calendar sync feed with 1-click "Import & Generate Brief" action
+- In-Workspace Pre-Meeting Context banner and Action Items export toolbar with verified external issue links
 
 See [CAPABILITIES.md](docs/CAPABILITIES.md) for what is currently operational.
 

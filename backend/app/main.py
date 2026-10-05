@@ -57,6 +57,7 @@ from app.api import (  # noqa: E402
     contradictions,
     continuity,
     people,
+    integrations,
     ws,
 )
 
@@ -75,6 +76,7 @@ app.include_router(people.router, prefix="/api/people", tags=["People"])
 app.include_router(knowledge.router, prefix="/api/knowledge", tags=["Knowledge"])
 app.include_router(artifacts.router, prefix="/api/artifacts", tags=["Artifacts"])
 app.include_router(query.router, prefix="/api/query", tags=["Query"])
+app.include_router(integrations.router, prefix="/api/integrations", tags=["Integrations"])
 app.include_router(agent_console.router, prefix="/api/agent", tags=["Agent Console"])
 app.include_router(ws.router, prefix="/ws", tags=["WebSocket"])
 app.include_router(ws.router, prefix="/api/ws", tags=["WebSocket"])

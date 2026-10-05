@@ -9,6 +9,7 @@ import People from './pages/People'
 import Knowledge from './pages/Knowledge'
 import Settings from './pages/Settings'
 import AgentConsole from './pages/AgentConsole'
+import Integrations from './pages/Integrations'
 import Overlay from './pages/Overlay'
 import './index.css'
 
@@ -22,6 +23,7 @@ const NAV = [
   { path: '/people', label: 'People', icon: '◎' },
   { path: '/knowledge', label: 'Knowledge', icon: '◈' },
   { section: 'SYSTEM' },
+  { path: '/integrations', label: 'Integrations', icon: '🔌' },
   { path: '/agent', label: 'Agent Console', icon: '⌬' },
   { path: '/settings', label: 'Settings', icon: '◌' },
 ]
@@ -55,10 +57,10 @@ function Sidebar() {
       </div>
       <div style={{ padding: '12px 16px', borderTop: '1px solid var(--border)' }}>
         <div style={{ fontSize: 'var(--text-xs)', color: 'var(--text-muted)' }}>
-          Phase 4 · Overlay + Mark Moment
+          Phase 8 · External Integrations
         </div>
         <div style={{ fontSize: 'var(--text-xs)', color: 'var(--text-muted)', marginTop: 2 }}>
-          Hotkey: Ctrl+Shift+M · Audio: adaptive
+          Calendar Sync · Pre-Meeting Briefs · Task Export
         </div>
       </div>
     </nav>
@@ -119,6 +121,7 @@ function AppContent() {
             <Route path="/decisions" element={<Decisions />} />
             <Route path="/people" element={<People />} />
             <Route path="/knowledge" element={<Knowledge />} />
+            <Route path="/integrations" element={<Integrations />} />
             <Route path="/agent" element={<AgentConsole />} />
             <Route path="/settings" element={<Settings />} />
           </Routes>

@@ -12,7 +12,7 @@ import {
   statusBadgeClass,
 } from '../mockData'
 
-type Tab = 'transcript' | 'decisions' | 'actions' | 'review' | 'timeline' | 'query'
+type Tab = 'transcript' | 'decisions' | 'actions' | 'review' | 'timeline' | 'query' | 'brief'
 
 export default function MeetingWorkspace() {
   const { id } = useParams<{ id: string }>()
@@ -192,6 +192,69 @@ export default function MeetingWorkspace() {
   const [nlQuery, setNlQuery] = useState('')
   const [nlAnswer, setNlAnswer] = useState<any>(null)
   const [queryLoading, setQueryLoading] = useState(false)
+
+  // Phase 8: External Integrations & Pre-Meeting Briefs
+  const [briefData, setBriefData] = useState<any | null>(null)
+  const [briefLoading, setBriefLoading] = useState(false)
+  const [taskExporting, setTaskExporting] = useState<string | null>(null)
+  const [exportReceipts, setExportReceipts] = useState<Record<string, any>>({})
+
+  useEffect(() => {
+    async function fetchBrief() {
+      if (!meeting?.id) return
+      try {
+        const res = await fetch(`http://localhost:8000/api/integrations/meetings/${meeting.id}/brief`)
+        if (res.ok) {
+          const data = await res.json()
+          setBriefData(data)
+        }
+      } catch {}
+    }
+    fetchBrief()
+  }, [meeting?.id])
+
+  const handleExportTask = async (actionId: string, destination: 'jira' | 'github' | 'linear') => {
+    setTaskExporting(actionId)
+    try {
+      const res = await fetch('http://localhost:8000/api/integrations/tasks/export', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          action_item_id: actionId,
+          destination,
+        }),
+      })
+      if (res.ok) {
+        const receipt = await res.json()
+        setExportReceipts((prev) => ({
+          ...prev,
+          [`${actionId}-${destination}`]: receipt,
+        }))
+      }
+    } catch (e) {
+      console.error(e)
+    } finally {
+      setTaskExporting(null)
+    }
+  }
+
+  const handleRegenerateBrief = async () => {
+    if (!meeting?.id) return
+    setBriefLoading(true)
+    try {
+      const res = await fetch(`http://localhost:8000/api/integrations/meetings/${meeting.id}/generate-brief`, {
+        method: 'POST',
+      })
+      if (res.ok) {
+        const data = await res.json()
+        setBriefData(data)
+      }
+    } catch (e) {
+      console.error(e)
+    } finally {
+      setBriefLoading(false)
+    }
+  }
 
   const handleAskMeeting = async (customQuery?: string) => {
     const q = customQuery || nlQuery
@@ -451,6 +514,41 @@ export default function MeetingWorkspace() {
           </div>
         )}
 
+        {/* Pre-Meeting Intelligence Brief Banner */}
+        {briefData && (
+          <div
+            className="mb-4"
+            style={{
+              padding: '12px 16px',
+              borderRadius: 'var(--radius-lg)',
+              background: 'rgba(59, 130, 246, 0.08)',
+              border: '1px solid rgba(59, 130, 246, 0.25)',
+              display: 'flex',
+              alignItems: 'center',
+              justifyContent: 'space-between',
+            }}
+          >
+            <div style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
+              <span style={{ fontSize: 16 }}>📋</span>
+              <div>
+                <div style={{ fontSize: 'var(--text-xs)', fontWeight: 600, color: 'var(--text-primary)' }}>
+                  Pre-Meeting Brief Available: {briefData.expected_topics?.length || 0} Expected Topics · {briefData.open_action_items?.length || 0} Open Actions Carried Over
+                </div>
+                <div style={{ fontSize: 10, color: 'var(--text-muted)' }}>
+                  Auto-grounded against {briefData.previous_meetings?.length || 0} prior related meetings
+                </div>
+              </div>
+            </div>
+            <button
+              onClick={() => setTab('brief')}
+              className="btn btn-secondary btn-sm"
+              style={{ fontSize: 11, padding: '3px 10px' }}
+            >
+              Inspect Brief ↗
+            </button>
+          </div>
+        )}
+
         {/* Tab navigation */}
         <div className="tab-nav mb-4" style={{ flexShrink: 0 }}>
           <button className={`tab-btn ${tab === 'decisions' ? 'active' : ''}`} onClick={() => setTab('decisions')}>
@@ -476,6 +574,9 @@ export default function MeetingWorkspace() {
           </button>
           <button className={`tab-btn ${tab === 'query' ? 'active' : ''}`} onClick={() => setTab('query')}>
             💬 Ask Meeting
+          </button>
+          <button className={`tab-btn ${tab === 'brief' ? 'active' : ''}`} onClick={() => setTab('brief')}>
+            📋 Brief {briefData && <span className="tab-count" style={{ background: '#3b82f6', color: '#fff' }}>Ready</span>}
           </button>
         </div>
 
@@ -544,6 +645,72 @@ export default function MeetingWorkspace() {
                     >
                       📎 View evidence
                     </button>
+                  </div>
+
+                  {/* Task Export Toolbar (Phase 8) */}
+                  <div style={{ marginTop: 10, paddingTop: 8, borderTop: '1px solid var(--border)', display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
+                    <div style={{ display: 'flex', gap: 6, alignItems: 'center' }}>
+                      <span style={{ fontSize: 10, color: 'var(--text-muted)' }}>Export:</span>
+                      <button
+                        onClick={() => handleExportTask(a.id, 'jira')}
+                        disabled={taskExporting === a.id}
+                        className="btn btn-secondary btn-sm"
+                        style={{ fontSize: 10, padding: '2px 8px' }}
+                      >
+                        Jira
+                      </button>
+                      <button
+                        onClick={() => handleExportTask(a.id, 'github')}
+                        disabled={taskExporting === a.id}
+                        className="btn btn-secondary btn-sm"
+                        style={{ fontSize: 10, padding: '2px 8px' }}
+                      >
+                        GitHub
+                      </button>
+                      <button
+                        onClick={() => handleExportTask(a.id, 'linear')}
+                        disabled={taskExporting === a.id}
+                        className="btn btn-secondary btn-sm"
+                        style={{ fontSize: 10, padding: '2px 8px' }}
+                      >
+                        Linear
+                      </button>
+                    </div>
+                    <div style={{ display: 'flex', gap: 6 }}>
+                      {exportReceipts[`${a.id}-jira`] && (
+                        <a
+                          href={exportReceipts[`${a.id}-jira`].external_url}
+                          target="_blank"
+                          rel="noreferrer"
+                          className="badge badge-blue"
+                          style={{ textDecoration: 'none', fontSize: 10 }}
+                        >
+                          ✓ {exportReceipts[`${a.id}-jira`].external_id} ↗
+                        </a>
+                      )}
+                      {exportReceipts[`${a.id}-github`] && (
+                        <a
+                          href={exportReceipts[`${a.id}-github`].external_url}
+                          target="_blank"
+                          rel="noreferrer"
+                          className="badge badge-green"
+                          style={{ textDecoration: 'none', fontSize: 10 }}
+                        >
+                          ✓ {exportReceipts[`${a.id}-github`].external_id} ↗
+                        </a>
+                      )}
+                      {exportReceipts[`${a.id}-linear`] && (
+                        <a
+                          href={exportReceipts[`${a.id}-linear`].external_url}
+                          target="_blank"
+                          rel="noreferrer"
+                          className="badge badge-purple"
+                          style={{ textDecoration: 'none', fontSize: 10 }}
+                        >
+                          ✓ {exportReceipts[`${a.id}-linear`].external_id} ↗
+                        </a>
+                      )}
+                    </div>
                   </div>
                 </div>
               ))}
@@ -1056,6 +1223,132 @@ export default function MeetingWorkspace() {
                   )}
                 </div>
               )}
+            </div>
+          )}
+
+          {tab === 'brief' && (
+            <div style={{ display: 'flex', flexDirection: 'column', gap: 16 }}>
+              <div className="card">
+                <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 12 }}>
+                  <div>
+                    <div className="card-title">Pre-Meeting Intelligence Brief</div>
+                    <div style={{ fontSize: 'var(--text-xs)', color: 'var(--text-muted)' }}>
+                      Auto-synthesized pre-meeting context from calendar sync and organizational memory (ADR-005, Phase 8).
+                    </div>
+                  </div>
+                  <button
+                    onClick={handleRegenerateBrief}
+                    disabled={briefLoading}
+                    className="btn btn-secondary btn-sm"
+                  >
+                    {briefLoading ? 'Analyzing...' : '↻ Regenerate Brief'}
+                  </button>
+                </div>
+
+                {briefData ? (
+                  <div style={{ display: 'flex', flexDirection: 'column', gap: 18 }}>
+                    {/* Expected Topics */}
+                    <div>
+                      <div style={{ fontSize: 11, fontWeight: 600, color: 'var(--text-muted)', marginBottom: 8, textTransform: 'uppercase', letterSpacing: '0.05em' }}>
+                        Expected Agenda Topics
+                      </div>
+                      <div style={{ display: 'flex', flexWrap: 'wrap', gap: 8 }}>
+                        {(briefData.expected_topics || []).map((topic: string, idx: number) => (
+                          <span key={idx} className="badge badge-blue" style={{ fontSize: 'var(--text-xs)', padding: '6px 12px' }}>
+                            ◈ {topic}
+                          </span>
+                        ))}
+                      </div>
+                    </div>
+
+                    {/* Relevant Documents & Links */}
+                    {briefData.relevant_documents && briefData.relevant_documents.length > 0 && (
+                      <div>
+                        <div style={{ fontSize: 11, fontWeight: 600, color: 'var(--text-muted)', marginBottom: 8, textTransform: 'uppercase', letterSpacing: '0.05em' }}>
+                          Attached Context & Meeting Links
+                        </div>
+                        <div style={{ display: 'flex', flexDirection: 'column', gap: 6 }}>
+                          {briefData.relevant_documents.map((doc: string, idx: number) => (
+                            <div key={idx} style={{ fontSize: 'var(--text-xs)', padding: '6px 12px', background: 'var(--bg-elevated)', borderRadius: 'var(--radius-sm)', border: '1px solid var(--border)' }}>
+                              🔗 {doc}
+                            </div>
+                          ))}
+                        </div>
+                      </div>
+                    )}
+
+                    {/* Open Action Items Carried Forward */}
+                    <div>
+                      <div style={{ fontSize: 11, fontWeight: 600, color: 'var(--text-muted)', marginBottom: 8, textTransform: 'uppercase', letterSpacing: '0.05em' }}>
+                        Carried-Over Open Action Items ({briefData.open_action_items?.length || 0})
+                      </div>
+                      {(!briefData.open_action_items || briefData.open_action_items.length === 0) ? (
+                        <div style={{ fontSize: 'var(--text-xs)', color: 'var(--text-muted)' }}>
+                          No pending action items carried over from prior meetings.
+                        </div>
+                      ) : (
+                        <div style={{ display: 'flex', flexDirection: 'column', gap: 8 }}>
+                          {briefData.open_action_items.map((act: any) => (
+                            <div
+                              key={act.id}
+                              style={{
+                                padding: '10px 14px',
+                                background: 'var(--bg-elevated)',
+                                border: '1px solid var(--border)',
+                                borderRadius: 'var(--radius-md)',
+                                display: 'flex',
+                                justifyContent: 'space-between',
+                                alignItems: 'center',
+                              }}
+                            >
+                              <div style={{ fontSize: 'var(--text-xs)', color: 'var(--text-primary)', fontWeight: 500 }}>
+                                ⚡ {act.task}
+                              </div>
+                              <div style={{ display: 'flex', gap: 6 }}>
+                                <span className={`badge ${act.priority === 'HIGH' ? 'badge-yellow' : 'badge-gray'}`}>
+                                  {act.priority}
+                                </span>
+                                <span className="badge badge-blue">{act.status}</span>
+                              </div>
+                            </div>
+                          ))}
+                        </div>
+                      )}
+                    </div>
+
+                    {/* Linked Prior Meetings */}
+                    <div>
+                      <div style={{ fontSize: 11, fontWeight: 600, color: 'var(--text-muted)', marginBottom: 8, textTransform: 'uppercase', letterSpacing: '0.05em' }}>
+                        Prior Related Meetings ({briefData.previous_meetings?.length || 0})
+                      </div>
+                      <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(240px, 1fr))', gap: 10 }}>
+                        {(briefData.previous_meetings || []).map((pm: any) => (
+                          <div
+                            key={pm.id}
+                            style={{
+                              padding: '10px 14px',
+                              background: 'var(--bg-elevated)',
+                              border: '1px solid var(--border)',
+                              borderRadius: 'var(--radius-md)',
+                            }}
+                          >
+                            <div style={{ fontSize: 'var(--text-xs)', fontWeight: 600, color: 'var(--text-primary)' }}>
+                              {pm.title}
+                            </div>
+                            <div style={{ fontSize: 10, color: 'var(--text-muted)', marginTop: 4 }}>
+                              📅 {new Date(pm.date).toLocaleDateString()}
+                            </div>
+                          </div>
+                        ))}
+                      </div>
+                    </div>
+                  </div>
+                ) : (
+                  <div style={{ padding: '24px 0', textAlign: 'center', color: 'var(--text-muted)', fontSize: 'var(--text-xs)' }}>
+                    No pre-meeting brief generated yet. Click "Regenerate Brief" to analyze calendar and organizational memory.
+                  </div>
+                )}
+              </div>
             </div>
           )}
         </div>

@@ -148,7 +148,7 @@ Deliverables:
 ---
 
 ### Phase 8 — External Integrations
-**Status**: 🔲 Pending  
+**Status**: ✅ Complete  
 **Commit tag**: `feat(phase-8): calendar, task integrations`
 
 Deliverables:
@@ -156,6 +156,7 @@ Deliverables:
 - Meeting brief auto-generation from calendar
 - Task export adapters (Jira, GitHub Issues, Linear)
 - Integration settings UI page
+- In-workspace task export & pre-meeting intelligence brief view
 
 ---
 

@@ -420,6 +420,8 @@ def _meeting_summary(m: Meeting) -> dict:
         "lifecycle_status": m.lifecycle_status,
         "processing_status": m.processing_status,
         "privacy_mode": m.privacy_mode,
+        "briefing_id": m.briefing_id,
+        "description": m.description,
         "quality_metrics": m.quality_metrics,
         "created_at": m.created_at.isoformat() if m.created_at else None,
         "updated_at": m.updated_at.isoformat() if m.updated_at else None,

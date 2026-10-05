@@ -1,12 +1,12 @@
 # CAPABILITIES.md
 
-> **Version**: 7.0 (Phase 7)  
+> **Version**: 8.0 (Phase 8)  
 > **Last updated**: 2026-10-05  
-> **Current Phase**: 7 — Ask the Meeting (Natural Language Queries + Evidence Grounding)
+> **Current Phase**: 8 — External Integrations (Calendar Sync, Pre-Meeting Briefs, Task Export)
 
 ---
 
-## Currently Operational (Phase 7)
+## Currently Operational (Phase 8)
 
 | Capability | Status | Notes |
 |---|---|---|
@@ -32,6 +32,10 @@
 | Strict Evidence Grounding | ✅ Complete | Zero-hallucination invariant, grounded=False & confidence=0.0 when evidence missing |
 | Verifiable Answer Citations | ✅ Complete | `AnswerSource[]` links to TranscriptSegments, Decisions, Actions, Contradictions, Marks |
 | Ask the Meeting UI Tab | ✅ Complete | Workspace query panel with suggested question chips, grounded badge, clickable evidence citation cards |
+| Calendar Synchronization | ✅ Complete | Google Calendar & Microsoft Graph / Outlook adapters with auto-sync |
+| Pre-Meeting Brief Auto-Generation | ✅ Complete | Generates `MeetingBrief` linking prior meetings, carried action items, unresolved questions, topics |
+| Task Export Adapters | ✅ Complete | 1-click export to Jira Issues, GitHub Issues, and Linear with evidence grounding |
+| Integrations Management UI | ✅ Complete | Dedicated Integrations page with connection testers, upcoming sync feed, and credential management |
 
 ---
 
