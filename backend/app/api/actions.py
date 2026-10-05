@@ -21,16 +21,39 @@ async def list_meeting_actions(meeting_id: str, db: AsyncSession = Depends(get_d
     result = await db.execute(select(ActionItem).where(ActionItem.originating_meeting_id == meeting_id))
     return [_action_dict(a) for a in result.scalars().all()]
 
-@router.patch("/{action_id}", summary="Update an action item")
+@router.patch("/{action_id}", summary="Update an action item with human correction tracking")
 async def update_action(action_id: str, body: dict, db: AsyncSession = Depends(get_db)) -> dict:
+    from app.pipeline.corrections import apply_human_correction
+
     result = await db.execute(select(ActionItem).where(ActionItem.id == action_id))
     action = result.scalar_one_or_none()
     if not action:
         return {"error": "Action item not found"}
-    for field in ("status", "priority", "task", "deadline"):
-        if field in body:
-            setattr(action, field, body[field])
+
+    corrections_applied = []
+    for field in ("status", "priority", "task", "deadline", "owner_id"):
+        if field in body and getattr(action, field) != body[field]:
+            old_val = getattr(action, field)
+            new_val = body[field]
+            setattr(action, field, new_val)
+            action.review_state = "CONFIRMED"
+            corrections_applied.append((field, old_val, new_val))
+
     await db.commit()
+
+    # Apply provenance and invalidation for each correction
+    for field, old_val, new_val in corrections_applied:
+        await apply_human_correction(
+            db=db,
+            meeting_id=action.originating_meeting_id,
+            target_type="ACTION_ITEM",
+            target_id=action_id,
+            field=field,
+            old_value=old_val,
+            new_value=new_val,
+            origin_stage="SEMANTIC",
+        )
+
     return _action_dict(action)
 
 def _action_dict(a: ActionItem) -> dict:

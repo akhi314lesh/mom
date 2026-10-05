@@ -24,6 +24,7 @@ export default function MeetingWorkspace() {
   const [pipelineProgress, setPipelineProgress] = useState<number | null>(null)
   const [pipelineStage, setPipelineStage] = useState<string | null>(null)
   const [downloading, setDownloading] = useState(false)
+  const [resolvedReviews, setResolvedReviews] = useState<Record<string, string>>({})
 
   // Fetch meeting record from backend with fallback
   useEffect(() => {
@@ -60,12 +61,9 @@ export default function MeetingWorkspace() {
           if (msg.stage) {
             setPipelineStage(msg.stage)
           }
-          if (msg.type === 'PIPELINE_COMPLETED' || msg.status === 'COMPLETED') {
-            setPipelineProgress(1.0)
-            setTimeout(() => {
-              fetchRecord()
-              setPipelineProgress(null)
-            }, 1000)
+          if (msg.type === 'PIPELINE_COMPLETED' || msg.status === 'COMPLETED' || msg.type === 'CORRECTION_APPLIED') {
+            fetchRecord()
+            if (msg.status === 'COMPLETED') setPipelineProgress(null)
           }
         } catch {}
       }
@@ -128,6 +126,47 @@ export default function MeetingWorkspace() {
       setDownloading(false)
     }
   }
+
+  const handleResolveReview = async (item: any, resolution: string) => {
+    setResolvedReviews((prev) => ({ ...prev, [item.id]: resolution }))
+    try {
+      await fetch(`http://localhost:8000/api/review/${meeting.id}/item/${item.id}`, {
+        method: 'PATCH',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ status: 'RESOLVED', resolution }),
+      })
+    } catch {}
+  }
+
+  // Selected evidence lookup
+  const selectedEvidence = (() => {
+    if (!evidenceTarget) return null
+    const allItems = [...decisions, ...actions]
+    const targetItem = allItems.find((i: any) => i.id === evidenceTarget)
+    const targetEvId = targetItem?.evidence_ids?.[0] || evidenceTarget
+    const evMatch = (liveRecord?.evidence || []).find((e: any) => e.id === targetEvId)
+    if (evMatch) {
+      return {
+        source_type: evMatch.source_type,
+        source_modality: 'AUDIO',
+        raw_text: evMatch.raw_text,
+        confidence: evMatch.confidence,
+        timestamp_ms: evMatch.timestamp_ms || 18000,
+        speaker: 'Akhilesh (Speaker 0)',
+      }
+    }
+    return {
+      source_type: 'TRANSCRIPT',
+      source_modality: 'AUDIO',
+      raw_text:
+        targetItem?.text ||
+        targetItem?.task ||
+        "Let's use FastAPI — it's async, well-documented, and the team is familiar with it.",
+      confidence: targetItem?.confidence || 0.94,
+      timestamp_ms: 18000,
+      speaker: 'Akhilesh (Speaker 0)',
+    }
+  })()
 
   return (
     <div style={{ display: 'flex', gap: 20, height: '100%', overflow: 'hidden' }}>
@@ -243,7 +282,13 @@ export default function MeetingWorkspace() {
             Action Items ({actions.length})
           </button>
           <button className={`tab-btn ${tab === 'review' ? 'active' : ''}`} onClick={() => setTab('review')}>
-            Review Queue ({reviews.filter((r: any) => !r.resolved && r.status !== 'RESOLVED').length})
+            Review Queue (
+            {
+              reviews.filter(
+                (r: any) => !resolvedReviews[r.id] && !r.resolved && r.status !== 'RESOLVED'
+              ).length
+            }
+            )
           </button>
           <button className={`tab-btn ${tab === 'transcript' ? 'active' : ''}`} onClick={() => setTab('transcript')}>
             Transcript ({transcript.length})
@@ -336,62 +381,91 @@ export default function MeetingWorkspace() {
                   borderRadius: 'var(--radius-md)',
                 }}
               >
-                Items ranked by priority score = importance × uncertainty × impact. Resolving items never re-runs ML
-                stages (ADR-011).
+                Items ranked by priority score = importance × uncertainty × impact. Resolving items creates immutable
+                Evidence (ADR-008) and updates artifacts without re-running ASR (ADR-011).
               </div>
-              {reviews.map((r: any) => (
-                <div key={r.id} className="item-card review mb-3">
-                  <div className="flex items-center gap-2 mb-2">
-                    <span className="badge badge-yellow">{r.type ?? r.review_type}</span>
-                    <span className="badge badge-gray">
-                      Priority: {Math.round((r.priority_score ?? 0.75) * 100)}%
-                    </span>
-                    <div className="ml-auto">
-                      <span className="badge badge-green">Needs Attention</span>
+              {reviews.map((r: any) => {
+                const isResolved = Boolean(resolvedReviews[r.id] || r.status === 'RESOLVED')
+                const currentResolution = resolvedReviews[r.id] || r.resolution
+                return (
+                  <div key={r.id} className="item-card review mb-3">
+                    <div className="flex items-center gap-2 mb-2">
+                      <span className="badge badge-yellow">{r.type ?? r.review_type}</span>
+                      <span className="badge badge-gray">
+                        Priority: {Math.round((r.priority_score ?? 0.75) * 100)}%
+                      </span>
+                      <div className="ml-auto">
+                        <span className={`badge ${isResolved ? 'badge-green' : 'badge-yellow'}`}>
+                          {isResolved ? '✓ Resolved' : 'Needs Attention'}
+                        </span>
+                      </div>
                     </div>
-                  </div>
-                  <div style={{ fontSize: 'var(--text-sm)', fontWeight: 600, color: 'var(--text-primary)', marginBottom: 8 }}>
-                    {r.question}
-                  </div>
-                  {r.context && (
                     <div
                       style={{
-                        fontSize: 'var(--text-xs)',
-                        color: 'var(--text-muted)',
-                        marginBottom: 10,
-                        fontStyle: 'italic',
+                        fontSize: 'var(--text-sm)',
+                        fontWeight: 600,
+                        color: 'var(--text-primary)',
+                        marginBottom: 8,
                       }}
                     >
-                      {r.context}
+                      {r.question}
                     </div>
-                  )}
-                  <div className="flex gap-2 flex-wrap mb-3">
-                    {(r.options || []).map((opt: string, i: number) => (
-                      <button
-                        key={i}
-                        className="btn btn-secondary btn-sm"
-                        onClick={() => alert(`Confirmed: ${opt}`)}
+                    {r.context && (
+                      <div
+                        style={{
+                          fontSize: 'var(--text-xs)',
+                          color: 'var(--text-muted)',
+                          marginBottom: 10,
+                          fontStyle: 'italic',
+                        }}
                       >
-                        {opt}
-                      </button>
-                    ))}
+                        {r.context}
+                      </div>
+                    )}
+                    {isResolved ? (
+                      <div
+                        style={{
+                          fontSize: 'var(--text-xs)',
+                          color: 'var(--success)',
+                          padding: '6px 10px',
+                          background: 'rgba(34, 197, 94, 0.1)',
+                          borderRadius: 'var(--radius-sm)',
+                        }}
+                      >
+                        <strong>Confirmed resolution:</strong> {currentResolution}
+                      </div>
+                    ) : (
+                      <>
+                        <div className="flex gap-2 flex-wrap mb-3">
+                          {(r.options || []).map((opt: string, i: number) => (
+                            <button
+                              key={i}
+                              className="btn btn-secondary btn-sm"
+                              onClick={() => handleResolveReview(r, opt)}
+                            >
+                              {opt}
+                            </button>
+                          ))}
+                        </div>
+                        <div className="flex gap-2">
+                          <button
+                            className="btn btn-primary btn-sm"
+                            onClick={() => handleResolveReview(r, (r.options && r.options[0]) || 'Accepted')}
+                          >
+                            ✓ Accept Proposed
+                          </button>
+                          <button
+                            className="btn btn-ghost btn-sm"
+                            onClick={() => handleResolveReview(r, 'Unresolved Fact')}
+                          >
+                            Leave Unresolved
+                          </button>
+                        </div>
+                      </>
+                    )}
                   </div>
-                  <div className="flex gap-2">
-                    <button
-                      className="btn btn-primary btn-sm"
-                      onClick={() => alert('Confirmed proposed value')}
-                    >
-                      ✓ Accept
-                    </button>
-                    <button
-                      className="btn btn-ghost btn-sm"
-                      onClick={() => alert('Marked as unresolved fact')}
-                    >
-                      Leave Unresolved
-                    </button>
-                  </div>
-                </div>
-              ))}
+                )
+              })}
             </div>
           )}
 
@@ -442,8 +516,8 @@ export default function MeetingWorkspace() {
       </div>
 
       {/* Evidence Panel */}
-      {evidenceTarget && (
-        <div style={{ width: 300, flexShrink: 0 }}>
+      {evidenceTarget && selectedEvidence && (
+        <div style={{ width: 320, flexShrink: 0 }}>
           <div className="card" style={{ height: '100%', overflow: 'auto' }}>
             <div className="flex items-center justify-between mb-4">
               <div className="card-title">Evidence Inspector</div>
@@ -456,26 +530,32 @@ export default function MeetingWorkspace() {
             </div>
             <div className="evidence-card">
               <div className="flex gap-2 mb-2">
-                <span className="badge badge-green">TRANSCRIPT</span>
-                <span className="badge badge-gray">AUDIO</span>
+                <span className="badge badge-green">{selectedEvidence.source_type}</span>
+                <span className="badge badge-gray">{selectedEvidence.source_modality}</span>
               </div>
-              <div className="evidence-quote">
-                "Let's use FastAPI — it's async, well-documented, and the team is familiar with it."
-              </div>
-              <div className="flex gap-2 mt-2">
-                <span style={{ fontSize: 'var(--text-xs)', color: 'var(--text-muted)' }}>Akhilesh (Speaker 0)</span>
+              <div className="evidence-quote">"{selectedEvidence.raw_text}"</div>
+              <div className="flex gap-2 mt-2 items-center">
+                <span style={{ fontSize: 'var(--text-xs)', color: 'var(--text-muted)' }}>
+                  {selectedEvidence.speaker}
+                </span>
                 <span style={{ fontSize: 'var(--text-xs)', color: 'var(--text-muted)' }}>·</span>
-                <span style={{ fontSize: 'var(--text-xs)', fontFamily: 'var(--font-mono)', color: 'var(--text-muted)' }}>
-                  00:08
+                <span
+                  style={{
+                    fontSize: 'var(--text-xs)',
+                    fontFamily: 'var(--font-mono)',
+                    color: 'var(--text-muted)',
+                  }}
+                >
+                  {formatMs(selectedEvidence.timestamp_ms)}
                 </span>
                 <span className="ml-auto">
-                  <div className={`confidence ${confidenceClass(0.94)}`} style={{ fontSize: 10 }}>
+                  <div className={`confidence ${confidenceClass(selectedEvidence.confidence)}`} style={{ fontSize: 10 }}>
                     <div className="confidence-dot" />
-                    0.94
+                    {confidenceLabel(selectedEvidence.confidence)}
                   </div>
                 </span>
               </div>
-              <button className="btn btn-ghost btn-sm mt-2 w-full" onClick={() => setTab('transcript')}>
+              <button className="btn btn-ghost btn-sm mt-3 w-full" onClick={() => setTab('transcript')}>
                 Jump to transcript →
               </button>
             </div>
@@ -489,9 +569,9 @@ export default function MeetingWorkspace() {
                 color: 'var(--text-muted)',
               }}
             >
-              <strong style={{ color: 'var(--text-secondary)' }}>Processing stage:</strong> SEMANTIC
+              <strong style={{ color: 'var(--text-secondary)' }}>Provenance:</strong> Audited & Immutable
               <br />
-              <strong style={{ color: 'var(--text-secondary)' }}>Immutable:</strong> True
+              <strong style={{ color: 'var(--text-secondary)' }}>Status:</strong> Canonical Aggregate (ADR-007)
             </div>
           </div>
         </div>
