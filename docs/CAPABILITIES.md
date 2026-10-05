@@ -1,8 +1,8 @@
 # CAPABILITIES.md
 
-> **Version**: 5.0 (Phase 5)  
+> **Version**: 6.0 (Phase 6)  
 > **Last updated**: 2026-10-04  
-> **Current Phase**: 5 — Live Capture + Semantic Timeline + Contradiction Detection
+> **Current Phase**: 6 — Meeting Continuity + Memory + Terminology
 
 ---
 
@@ -23,6 +23,11 @@
 | Decision Unresolved Invariant | ✅ Complete | Strict non-arbitrary invariant: flags UNRESOLVED, preserves both claims |
 | Human Arbitration Flow | ✅ Complete | Resolves conflicts with immutable HUMAN evidence, recalculates staleness |
 | Semantic Timeline & Dispute Cards | ✅ Complete | Rich filterable timeline with dispute resolution controls |
+| Cross-Meeting Action Continuity | ✅ Complete | ActionItem tracking across meetings, last_updated_meeting_id, immutable CONTINUITY_UPDATE evidence |
+| KnowledgeItem Accretion | ✅ Complete | Deduplication, source_meeting_ids, strict verification invariants |
+| Terminology Dictionary | ✅ Complete | Auto-detected domain terms & acronyms, aliases, verification API |
+| People Directory & History | ✅ Complete | Cross-meeting participation, speaking metrics, assigned action tracker |
+| Knowledge Base UI | ✅ Complete | 4-tab interface for Knowledge, Terminology, Actions, Contradictions |
 
 ---
 

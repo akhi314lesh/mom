@@ -117,7 +117,7 @@ Deliverables:
 ---
 
 ### Phase 6 — Meeting Continuity + Memory + Terminology
-**Status**: 🔲 Pending  
+**Status**: ✅ Complete  
 **Commit tag**: `feat(phase-6): continuity, cross-meeting memory, terminology`
 
 Deliverables:

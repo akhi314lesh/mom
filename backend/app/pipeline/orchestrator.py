@@ -649,7 +649,21 @@ async def process_meeting_pipeline(meeting_id: str, audio_path_override: str | N
             ended_at=datetime.now(timezone.utc),
         )
         db.add(art_run)
-        stages_completed.append(ProcessingStage.ARTIFACTS)
+        # -------------------------------------------------------------
+        # STAGE 7: CONTINUITY & KNOWLEDGE ACCRETION (Phase 6)
+        # -------------------------------------------------------------
+        from app.pipeline.continuity import continuity_resolver
+        from app.pipeline.knowledge_accretion import knowledge_accretion_engine
+
+        try:
+            await continuity_resolver.resolve_meeting_continuity(db, meeting_id)
+        except Exception:
+            pass
+
+        try:
+            await knowledge_accretion_engine.accrete_from_meeting(db, meeting_id)
+        except Exception:
+            pass
 
         # Final meeting state update
         meeting.processing_status = ProcessingStatus.COMPLETE

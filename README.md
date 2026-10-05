@@ -75,23 +75,24 @@ npm run dev                     # starts at http://localhost:5173
 
 ## Current Phase
 
-**Phase 5 — Live Capture + Semantic Timeline + Contradiction Detection**
+**Phase 6 — Meeting Continuity + Memory + Terminology**
 
 Features implemented:
 - Full 22 ORM entity models with async SQLite/PostgreSQL layer
 - Progressive processing pipeline (ASR → Diarization → Identity → Semantic Extraction → Artifacts)
 - Evidence provenance chain & Human Correction Engine (ADR-008, ADR-010, ADR-011)
 - DOCX Artifact generation from canonical `MeetingRecord`
-- People Directory with speaker attribution and participant resolution
 - Standalone Desktop Overlay Shell with always-on-top pywebview/browser launcher (`desktop/overlay_launcher.py`)
 - Hardware-adaptive Capture Controllers (`MicCaptureController`, `SystemAudioController`, `ManualEventController`) with graceful degradation to `NO_AUDIO` mode
 - Mark Moment engine (`Ctrl+Shift+M`) generating immutable `Evidence` (`source="HUMAN"`, `confidence=1.0`, `priority=1.0`)
 - Real-time streaming utterance processor (`OVERLAY` mode) with automatic speech segment creation & real-time semantic event triggers
-- Contradiction Detection Engine (`backend/app/pipeline/contradictions.py`) across decisions, deadlines, owners, and factual claims
-- Strict architecture invariant: The system ALWAYS prefers `DECISION UNRESOLVED` (`review_state="UNCERTAIN"`) over silently picking one side of a conflict; both sides are preserved in immutable `Evidence`
-- Cross-meeting continuity & contradiction detection (`is_cross_meeting=True`)
-- Human arbitration workflow (`PATCH /api/contradictions/{id}/resolve`) creating high-confidence correction `Evidence`, updating decisions to `CONFIRMED`/`OVERRIDDEN`, and marking artifacts `STALE`
-- Frontend Semantic Event Timeline with filter chips (`All`, `Decisions`, `Actions`, `Contradictions & Flags`, `Marks`), dual-claim dispute cards, and instant arbitration buttons
+- Contradiction Detection Engine (`backend/app/pipeline/contradictions.py`) with strict invariant preferring `DECISION UNRESOLVED` over arbitrary resolution
+- Cross-meeting continuity resolver (`backend/app/pipeline/continuity.py`): tracks `ActionItem` lifecycle across meetings, preserves `originating_meeting_id`, records `last_updated_meeting_id`, and appends immutable `CONTINUITY_UPDATE` evidence
+- KnowledgeItem accretion pipeline (`backend/app/pipeline/knowledge_accretion.py`): accretes confirmed decisions, architectural patterns, and facts into persistent organizational memory with deduplication across `source_meeting_ids`
+- Strict KnowledgeItem invariant: `verified=True` requires EITHER human verification (`source="HUMAN"`) OR system confidence >= 0.85; `INFERRED` alone is NEVER sufficient to set `verified=True`
+- Terminology dictionary engine & UI: auto-detects technical terms & acronyms, tracks source meetings, supports human verification and custom term additions
+- People Directory with cross-meeting intelligence (`/api/people/directory`): aggregated speaking times, open vs completed task counts, resolved speaker aliases, and complete meeting attendance history
+- Knowledge Base UI (`frontend/src/pages/Knowledge.tsx`): 4-tab command center for Knowledge Base, Terminology Dictionary, Cross-Meeting Actions, and Decision Reversals
 
 See [CAPABILITIES.md](docs/CAPABILITIES.md) for what is currently operational.
 
