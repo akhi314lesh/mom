@@ -50,7 +50,7 @@ class LinearExportAdapter(BaseTaskExportAdapter):
         if evidence_quote:
             lines.append(f"\n> **Evidence Grounding**:\n> \"{evidence_quote}\"")
 
-        lines.append("\n*Created via MoM Intelligence System*")
+        lines.append("\n*Created via MOM for meetings*")
         description_text = "\n".join(lines)
 
         priority_map = {"LOW": 3, "MEDIUM": 2, "HIGH": 1}

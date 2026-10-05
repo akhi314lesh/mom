@@ -26,7 +26,7 @@ async def lifespan(app: FastAPI):
 app = FastAPI(
     title=settings.app_title,
     version=settings.app_version,
-    description="Evidence-grounded meeting intelligence system.",
+    description="MOM for meetings — Evidence-grounded meeting intelligence system.",
     lifespan=lifespan,
 )
 

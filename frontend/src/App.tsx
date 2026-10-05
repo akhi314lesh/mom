@@ -34,7 +34,7 @@ function Sidebar() {
       <div className="sidebar-logo">
         <div className="sidebar-logo-mark">M</div>
         <div>
-          <div className="sidebar-logo-text">MoM Intelligence</div>
+          <div className="sidebar-logo-text">MOM for meetings</div>
           <div className="sidebar-logo-sub">Evidence Grounded</div>
         </div>
       </div>

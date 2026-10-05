@@ -17,7 +17,7 @@ def launch_overlay(meeting_id: str = "default", port: int = 5173, backend_port: 
     overlay_url = f"http://localhost:{port}/overlay/{meeting_id}"
 
     print(f"==================================================")
-    print(f" MoM Intelligence — Desktop Overlay Shell (ADR-005)")
+    print(f" MOM for meetings — Desktop Overlay Shell (ADR-005)")
     print(f" Meeting ID : {meeting_id}")
     print(f" Overlay URL: {overlay_url}")
     print(f" Hotkey     : Ctrl+Shift+M (Mark Moment)")
@@ -29,7 +29,7 @@ def launch_overlay(meeting_id: str = "default", port: int = 5173, backend_port: 
 
         print("[+] pywebview detected. Launching native always-on-top floating overlay...")
         window = webview.create_window(
-            title="MoM Desktop Overlay",
+            title="MOM for meetings — Desktop Overlay",
             url=overlay_url,
             width=440,
             height=680,

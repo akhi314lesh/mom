@@ -42,7 +42,7 @@ class Settings(BaseSettings):
     )
 
     # Application
-    app_title: str = "Meeting Intelligence System"
+    app_title: str = "MOM for meetings"
     app_version: str = "0.1.0"
     debug: bool = True
 

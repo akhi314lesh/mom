@@ -51,7 +51,7 @@ class GitHubIssuesExportAdapter(BaseTaskExportAdapter):
         if evidence_quote:
             md_body.append(f"\n> **Grounding Evidence Quote**:\n> \"{evidence_quote}\"")
 
-        md_body.append("\n---\n*Exported by [AI Meeting Intelligence](https://github.com/akhi314lesh/mom)*")
+        md_body.append("\n---\n*Exported by [MOM for meetings](https://github.com/akhi314lesh/mom)*")
         body_content = "\n".join(md_body)
 
         labels = options.get("labels", ["action-item", "meeting-intelligence"])

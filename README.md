@@ -1,4 +1,4 @@
-# AI Meeting Intelligence System
+# MOM for meetings
 
 **An evidence-grounded meeting intelligence operating system.**
 

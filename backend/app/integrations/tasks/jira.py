@@ -52,7 +52,7 @@ class JiraExportAdapter(BaseTaskExportAdapter):
         if evidence_quote:
             desc_lines.append(f"\n> **Evidence Grounding**:\n> \"{evidence_quote}\"")
 
-        desc_lines.append("\n*Automated sync from MoM Meeting Intelligence*")
+        desc_lines.append("\n*Automated sync from MOM for meetings*")
         description_body = "\n".join(desc_lines)
 
         priority_str = action.priority.value if hasattr(action.priority, "value") else (str(action.priority) if action.priority else "Medium")
