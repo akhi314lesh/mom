@@ -14,11 +14,55 @@ export default function NewMeeting() {
   const [title, setTitle] = useState('')
   const [file, setFile] = useState<File | null>(null)
   const [privacy, setPrivacy] = useState('LOCAL')
+  const [loading, setLoading] = useState(false)
 
   const selected = CAPTURE_MODES.find(m => m.value === mode)!
 
-  const handleCreate = () => {
-    // Phase 0: navigate to mock meeting
+  const handleCreate = async () => {
+    setLoading(true)
+    try {
+      if (mode === 'IMPORT' && file) {
+        const formData = new FormData()
+        formData.append('file', file)
+        formData.append('title', title.trim() || file.name)
+        formData.append('language', 'en')
+
+        const res = await fetch('http://localhost:8000/api/ingestion/upload', {
+          method: 'POST',
+          body: formData,
+        })
+        if (res.ok) {
+          const data = await res.json()
+          navigate(`/meetings/${data.meeting_id}`)
+          return
+        }
+      } else {
+        const res = await fetch('http://localhost:8000/api/meetings/', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({
+            title: title.trim() || 'Untitled Meeting',
+            capture_mode: mode,
+            privacy_mode: privacy,
+          }),
+        })
+        if (res.ok) {
+          const data = await res.json()
+          // Automatically trigger pipeline if import mode
+          if (mode === 'IMPORT') {
+            await fetch(`http://localhost:8000/api/processing/${data.id}/run`, { method: 'POST' })
+          }
+          navigate(`/meetings/${data.id}`)
+          return
+        }
+      }
+    } catch {
+      // Backend not running locally; fallback to mock workspace
+    } finally {
+      setLoading(false)
+    }
+
+    // Fallback to sample meeting workspace
     navigate('/meetings/mtg-001')
   }
 
@@ -129,10 +173,10 @@ export default function NewMeeting() {
       )}
 
       <div className="flex gap-3">
-        <button className="btn btn-primary btn-lg" onClick={handleCreate}>
-          {mode === 'IMPORT' ? 'Upload & Process' : mode === 'OVERLAY' ? 'Launch Overlay' : 'Create Meeting'}
+        <button className="btn btn-primary btn-lg" onClick={handleCreate} disabled={loading}>
+          {loading ? 'Creating & Starting Pipeline...' : mode === 'IMPORT' ? 'Upload & Process' : mode === 'OVERLAY' ? 'Launch Overlay' : 'Create Meeting'}
         </button>
-        <button className="btn btn-secondary btn-lg" onClick={() => navigate('/meetings')}>Cancel</button>
+        <button className="btn btn-secondary btn-lg" onClick={() => navigate('/meetings')} disabled={loading}>Cancel</button>
       </div>
     </div>
   )

@@ -76,25 +76,155 @@ async def delete_meeting(meeting_id: str, db: AsyncSession = Depends(get_db)) ->
 async def get_meeting_record(meeting_id: str, db: AsyncSession = Depends(get_db)) -> dict[str, Any]:
     """
     Assemble and return the canonical MeetingRecord for this meeting.
-    Phase 0: returns stub structure. Phase 1+: fully populated.
+    Fulfills ADR-007: canonical aggregate view of meeting state.
     """
+    from app.models.participant import Participant, Speaker
+    from app.models.transcript import TranscriptSegment
+    from app.models.decisions import Decision
+    from app.models.actions import ActionItem
+    from app.models.questions import Question
+    from app.models.review import ReviewItem
+    from app.models.artifacts import Artifact
+    from app.models.evidence import Evidence
+
     meeting = await _get_or_404(meeting_id, db)
+
+    parts_res = await db.execute(select(Participant).where(Participant.meeting_id == meeting_id))
+    spks_res = await db.execute(select(Speaker).where(Speaker.meeting_id == meeting_id))
+    segs_res = await db.execute(
+        select(TranscriptSegment)
+        .where(TranscriptSegment.meeting_id == meeting_id)
+        .order_by(TranscriptSegment.start_ms)
+    )
+    decs_res = await db.execute(select(Decision).where(Decision.meeting_id == meeting_id))
+    acts_res = await db.execute(select(ActionItem).where(ActionItem.originating_meeting_id == meeting_id))
+    ques_res = await db.execute(select(Question).where(Question.meeting_id == meeting_id))
+    revs_res = await db.execute(select(ReviewItem).where(ReviewItem.meeting_id == meeting_id))
+    arts_res = await db.execute(select(Artifact).where(Artifact.meeting_id == meeting_id))
+    evs_res = await db.execute(select(Evidence).where(Evidence.meeting_id == meeting_id))
+
+    participants = parts_res.scalars().all()
+    part_name_map = {p.id: p.name for p in participants}
+
+    speakers = spks_res.scalars().all()
+    speaker_display_map = {
+        s.id: part_name_map.get(s.resolved_participant_id, s.label)
+        for s in speakers
+    }
+
+    transcript_list = [
+        {
+            "id": s.id,
+            "speaker_id": s.speaker_id,
+            "speaker_name": speaker_display_map.get(s.speaker_id, "Unknown"),
+            "start_ms": s.start_ms,
+            "end_ms": s.end_ms,
+            "text": s.text,
+            "asr_confidence": s.asr_confidence,
+            "source_modality": s.source_modality,
+        }
+        for s in segs_res.scalars().all()
+    ]
+
+    decisions_list = [
+        {
+            "id": d.id,
+            "text": d.text,
+            "status": d.status,
+            "confidence": d.confidence,
+            "review_state": d.review_state,
+            "evidence_ids": d.evidence_ids,
+        }
+        for d in decs_res.scalars().all()
+    ]
+
+    actions_list = [
+        {
+            "id": a.id,
+            "task": a.task,
+            "owner": part_name_map.get(a.owner_id, "Unassigned"),
+            "owner_id": a.owner_id,
+            "owner_confidence": a.owner_confidence,
+            "deadline": a.deadline.isoformat() if a.deadline else None,
+            "deadline_confidence": a.deadline_confidence,
+            "status": a.status,
+            "priority": a.priority,
+            "confidence": a.confidence,
+            "review_state": a.review_state,
+            "evidence_ids": a.evidence_ids,
+        }
+        for a in acts_res.scalars().all()
+    ]
+
+    questions_list = [
+        {
+            "id": q.id,
+            "text": q.text,
+            "answered": q.answered,
+            "answer_text": q.answer_text,
+            "confidence": q.confidence,
+            "evidence_ids": q.evidence_ids,
+        }
+        for q in ques_res.scalars().all()
+    ]
+
+    review_list = [
+        {
+            "id": r.id,
+            "type": r.type,
+            "question": r.question,
+            "options": r.options,
+            "context": r.context,
+            "priority_score": r.priority_score,
+            "status": r.status,
+            "evidence_ids": r.evidence_ids,
+        }
+        for r in revs_res.scalars().all()
+    ]
+
+    artifacts_list = [
+        {
+            "id": a.id,
+            "type": a.type,
+            "status": a.status,
+            "path": a.path,
+            "file_size_bytes": a.file_size_bytes,
+        }
+        for a in arts_res.scalars().all()
+    ]
+
+    evidence_list = [
+        {
+            "id": e.id,
+            "source_type": e.source_type,
+            "timestamp_ms": e.timestamp_ms,
+            "raw_text": e.raw_text,
+            "confidence": e.confidence,
+        }
+        for e in evs_res.scalars().all()
+    ]
+
     return {
         "meeting": _meeting_summary(meeting),
-        "participants": [],
-        "speakers": [],
-        "transcript": [],
-        "evidence": [],
-        "events": [],
-        "decisions": [],
-        "action_items": [],
-        "questions": [],
-        "contradictions": [],
-        "topics": [],
-        "timeline": [],
-        "review_items": [],
+        "participants": [{"id": p.id, "name": p.name, "role": p.role} for p in participants],
+        "speakers": [
+            {
+                "id": s.id,
+                "label": s.label,
+                "resolved_participant_id": s.resolved_participant_id,
+                "resolution_confidence": s.resolution_confidence,
+                "total_speaking_time_ms": s.total_speaking_time_ms,
+            }
+            for s in speakers
+        ],
+        "transcript": transcript_list,
+        "evidence": evidence_list,
+        "decisions": decisions_list,
+        "action_items": actions_list,
+        "questions": questions_list,
+        "review_items": review_list,
         "quality_metrics": meeting.quality_metrics or {},
-        "artifacts": [],
+        "artifacts": artifacts_list,
     }
 
 

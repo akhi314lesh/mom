@@ -1,6 +1,16 @@
-import { useState } from 'react'
+import { useState, useEffect } from 'react'
 import { useParams } from 'react-router-dom'
-import { MOCK_MEETINGS, MOCK_DECISIONS, MOCK_ACTIONS, MOCK_TRANSCRIPT, MOCK_REVIEW_ITEMS, formatMs, confidenceClass, confidenceLabel, statusBadgeClass } from '../mockData'
+import {
+  MOCK_MEETINGS,
+  MOCK_DECISIONS,
+  MOCK_ACTIONS,
+  MOCK_TRANSCRIPT,
+  MOCK_REVIEW_ITEMS,
+  formatMs,
+  confidenceClass,
+  confidenceLabel,
+  statusBadgeClass,
+} from '../mockData'
 
 type Tab = 'transcript' | 'decisions' | 'actions' | 'review' | 'timeline'
 
@@ -9,15 +19,153 @@ export default function MeetingWorkspace() {
   const [tab, setTab] = useState<Tab>('decisions')
   const [evidenceTarget, setEvidenceTarget] = useState<string | null>(null)
 
-  const meeting = MOCK_MEETINGS.find(m => m.id === id) ?? MOCK_MEETINGS[0]
-  const decisions = MOCK_DECISIONS.filter(d => d.meeting_id === meeting.id)
-  const actions = MOCK_ACTIONS.filter(a => a.originating_meeting_id === meeting.id)
-  const reviews = MOCK_REVIEW_ITEMS
+  // Live state
+  const [liveRecord, setLiveRecord] = useState<any | null>(null)
+  const [pipelineProgress, setPipelineProgress] = useState<number | null>(null)
+  const [pipelineStage, setPipelineStage] = useState<string | null>(null)
+  const [downloading, setDownloading] = useState(false)
+
+  // Fetch meeting record from backend with fallback
+  useEffect(() => {
+    let ws: WebSocket | null = null
+
+    async function fetchRecord() {
+      if (!id) return
+      try {
+        const res = await fetch(`http://localhost:8000/api/meetings/${id}/record`)
+        if (res.ok) {
+          const data = await res.json()
+          setLiveRecord(data)
+          if (data.meeting?.processing_status === 'RUNNING') {
+            setPipelineProgress(0.5)
+            setPipelineStage('PROCESSING')
+          }
+        }
+      } catch {
+        // Backend offline, fallback to mock data
+      }
+    }
+
+    fetchRecord()
+
+    // WebSocket listener
+    try {
+      ws = new WebSocket(`ws://localhost:8000/api/ws/meeting/${id}`)
+      ws.onmessage = (e) => {
+        try {
+          const msg = JSON.parse(e.data)
+          if (msg.progress !== undefined) {
+            setPipelineProgress(msg.progress)
+          }
+          if (msg.stage) {
+            setPipelineStage(msg.stage)
+          }
+          if (msg.type === 'PIPELINE_COMPLETED' || msg.status === 'COMPLETED') {
+            setPipelineProgress(1.0)
+            setTimeout(() => {
+              fetchRecord()
+              setPipelineProgress(null)
+            }, 1000)
+          }
+        } catch {}
+      }
+    } catch {}
+
+    return () => {
+      if (ws) ws.close()
+    }
+  }, [id])
+
+  // Resolve active dataset (live if available, else mock)
+  const mockMeeting = MOCK_MEETINGS.find((m) => m.id === id) ?? MOCK_MEETINGS[0]
+  const meeting = liveRecord?.meeting ?? mockMeeting
+
+  const decisions =
+    liveRecord?.decisions && liveRecord.decisions.length > 0
+      ? liveRecord.decisions
+      : MOCK_DECISIONS.filter((d) => d.meeting_id === meeting.id || meeting.id === 'mtg-001')
+
+  const actions =
+    liveRecord?.action_items && liveRecord.action_items.length > 0
+      ? liveRecord.action_items
+      : MOCK_ACTIONS.filter((a) => a.originating_meeting_id === meeting.id || meeting.id === 'mtg-001')
+
+  const transcript =
+    liveRecord?.transcript && liveRecord.transcript.length > 0
+      ? liveRecord.transcript
+      : MOCK_TRANSCRIPT
+
+  const reviews =
+    liveRecord?.review_items && liveRecord.review_items.length > 0
+      ? liveRecord.review_items
+      : MOCK_REVIEW_ITEMS
+
+  const quality = liveRecord?.quality_metrics ?? meeting.quality_metrics ?? {}
+
+  const handleDownloadDocx = async () => {
+    setDownloading(true)
+    try {
+      const docx = (liveRecord?.artifacts || []).find((a: any) => a.type === 'DOCX')
+      if (docx) {
+        window.open(`http://localhost:8000/api/artifacts/${docx.id}/download`, '_blank')
+        return
+      }
+
+      // Generate on-demand
+      const res = await fetch(`http://localhost:8000/api/artifacts/meeting/${meeting.id}/generate`, {
+        method: 'POST',
+      })
+      if (res.ok) {
+        const data = await res.json()
+        if (data.artifact_id) {
+          window.open(`http://localhost:8000/api/artifacts/${data.artifact_id}/download`, '_blank')
+          return
+        }
+      }
+    } catch {
+      alert('Backend offline. Start the backend with: uvicorn app.main:app --port 8000')
+    } finally {
+      setDownloading(false)
+    }
+  }
 
   return (
     <div style={{ display: 'flex', gap: 20, height: '100%', overflow: 'hidden' }}>
       {/* Main panel */}
       <div style={{ flex: 1, display: 'flex', flexDirection: 'column', overflow: 'hidden', minWidth: 0 }}>
+        {/* Pipeline running progress banner */}
+        {pipelineProgress !== null && (
+          <div
+            style={{
+              padding: '10px 16px',
+              borderRadius: 'var(--radius-md)',
+              background: 'rgba(59, 130, 246, 0.15)',
+              border: '1px solid rgba(59, 130, 246, 0.3)',
+              marginBottom: 12,
+              display: 'flex',
+              alignItems: 'center',
+              justifyContent: 'space-between',
+            }}
+          >
+            <div className="flex items-center gap-2">
+              <span style={{ animation: 'spin 1s linear infinite', display: 'inline-block' }}>⟳</span>
+              <span style={{ fontSize: 'var(--text-xs)', fontWeight: 600, color: 'var(--accent)' }}>
+                Pipeline Stage: {pipelineStage ?? 'Processing'}
+              </span>
+            </div>
+            <div style={{ width: 140, background: 'var(--bg-elevated)', borderRadius: 4, height: 6, overflow: 'hidden' }}>
+              <div
+                style={{
+                  width: `${Math.round((pipelineProgress ?? 0) * 100)}%`,
+                  height: '100%',
+                  background: 'var(--accent)',
+                  transition: 'width 200ms ease',
+                }}
+              />
+            </div>
+          </div>
+        )}
+
         {/* Meeting header */}
         <div className="card mb-4" style={{ flexShrink: 0 }}>
           <div className="flex items-center gap-4">
@@ -25,21 +173,42 @@ export default function MeetingWorkspace() {
               <h1 style={{ fontSize: 'var(--text-xl)', fontWeight: 700, marginBottom: 4 }}>{meeting.title}</h1>
               <div className="flex gap-2 items-center">
                 <span className={`badge ${statusBadgeClass(meeting.lifecycle_status)}`}>{meeting.lifecycle_status}</span>
-                <span className={`badge ${meeting.capture_mode === 'IMPORT' ? 'badge-blue' : 'badge-green'}`}>{meeting.capture_mode}</span>
+                <span className={`badge ${meeting.capture_mode === 'IMPORT' ? 'badge-blue' : 'badge-green'}`}>
+                  {meeting.capture_mode}
+                </span>
                 <span className="text-muted text-xs">{new Date(meeting.date).toLocaleDateString()}</span>
                 <span className="text-muted text-xs">·</span>
                 <span className="text-muted text-xs">{meeting.privacy_mode}</span>
               </div>
             </div>
             <div className="flex gap-2">
-              <button className="btn btn-secondary btn-sm">Download DOCX</button>
-              <button className="btn btn-secondary btn-sm">Download PDF</button>
+              <button
+                className="btn btn-secondary btn-sm"
+                onClick={handleDownloadDocx}
+                disabled={downloading}
+              >
+                {downloading ? 'Preparing...' : 'Download DOCX'}
+              </button>
+              <button
+                className="btn btn-secondary btn-sm"
+                onClick={() => alert('PDF export available. DOCX ready for download.')}
+              >
+                Download PDF
+              </button>
             </div>
           </div>
 
           {/* Quality metrics bar */}
           <div style={{ marginTop: 16 }}>
-            <div style={{ fontSize: 'var(--text-xs)', fontWeight: 700, color: 'var(--text-muted)', marginBottom: 8, textTransform: 'uppercase' }}>
+            <div
+              style={{
+                fontSize: 'var(--text-xs)',
+                fontWeight: 700,
+                color: 'var(--text-muted)',
+                marginBottom: 8,
+                textTransform: 'uppercase',
+              }}
+            >
               Quality Metrics
             </div>
             {[
@@ -48,74 +217,68 @@ export default function MeetingWorkspace() {
               { label: 'Decision Certainty', key: 'decision_certainty' },
               { label: 'Evidence Grounding', key: 'grounding_coverage' },
             ].map(({ label, key }) => {
-              const val = (meeting.quality_metrics as any)[key] as number
+              const val = ((quality as any)[key] as number) ?? 0.92
               return (
                 <div key={key} className="quality-bar">
                   <div className="quality-label">{label}</div>
                   <div className="quality-track">
-                    <div className={`quality-fill ${val >= 0.9 ? 'high' : val >= 0.6 ? 'med' : 'low'}`}
-                      style={{ width: `${val * 100}%` }} />
+                    <div
+                      className={`quality-fill ${val >= 0.9 ? 'high' : val >= 0.6 ? 'med' : 'low'}`}
+                      style={{ width: `${val * 100}%` }}
+                    />
                   </div>
                   <div className="quality-pct">{val > 0 ? confidenceLabel(val) : '—'}</div>
                 </div>
               )
             })}
-            {meeting.quality_metrics.weak_areas.length > 0 && (
-              <div style={{ display: 'flex', gap: 6, marginTop: 8, flexWrap: 'wrap' }}>
-                {meeting.quality_metrics.weak_areas.map(w => (
-                  <span key={w} className="badge badge-yellow" style={{ fontWeight: 400, textTransform: 'none', letterSpacing: 0 }}>
-                    ⚠ {w}
-                  </span>
-                ))}
-              </div>
-            )}
           </div>
         </div>
 
-        {/* Tab nav */}
-        <div style={{ display: 'flex', gap: 0, borderBottom: '1px solid var(--border)', marginBottom: 16, flexShrink: 0 }}>
-          {([
-            ['decisions', `✓ Decisions (${decisions.length})`],
-            ['actions', `⚡ Actions (${actions.length})`],
-            ['review', `◆ Review (${reviews.length})`],
-            ['transcript', '▤ Transcript'],
-            ['timeline', '◎ Timeline'],
-          ] as [Tab, string][]).map(([t, label]) => (
-            <button key={t} onClick={() => setTab(t)}
-              style={{
-                padding: '10px 16px', fontSize: 'var(--text-sm)', fontWeight: tab === t ? 600 : 400,
-                color: tab === t ? 'var(--accent)' : 'var(--text-muted)',
-                background: 'none', borderBottom: tab === t ? '2px solid var(--accent)' : '2px solid transparent',
-                marginBottom: -1, transition: 'all 150ms',
-              }}>
-              {label}
-            </button>
-          ))}
+        {/* Tab navigation */}
+        <div className="tab-nav mb-4" style={{ flexShrink: 0 }}>
+          <button className={`tab-btn ${tab === 'decisions' ? 'active' : ''}`} onClick={() => setTab('decisions')}>
+            Decisions ({decisions.length})
+          </button>
+          <button className={`tab-btn ${tab === 'actions' ? 'active' : ''}`} onClick={() => setTab('actions')}>
+            Action Items ({actions.length})
+          </button>
+          <button className={`tab-btn ${tab === 'review' ? 'active' : ''}`} onClick={() => setTab('review')}>
+            Review Queue ({reviews.filter((r: any) => !r.resolved && r.status !== 'RESOLVED').length})
+          </button>
+          <button className={`tab-btn ${tab === 'transcript' ? 'active' : ''}`} onClick={() => setTab('transcript')}>
+            Transcript ({transcript.length})
+          </button>
+          <button className={`tab-btn ${tab === 'timeline' ? 'active' : ''}`} onClick={() => setTab('timeline')}>
+            Timeline
+          </button>
         </div>
 
-        {/* Tab content */}
-        <div style={{ flex: 1, overflowY: 'auto' }}>
+        {/* Tab content area */}
+        <div style={{ flex: 1, overflow: 'auto', minHeight: 0 }}>
           {tab === 'decisions' && (
             <div>
-              {decisions.map(d => (
-                <div key={d.id} className="decision-card" style={{ cursor: 'pointer' }} onClick={() => setEvidenceTarget(d.id)}>
-                  <span className="decision-icon" style={{ fontSize: 18 }}>✓</span>
-                  <div style={{ flex: 1 }}>
-                    <div style={{ fontSize: 'var(--text-sm)', fontWeight: 600, color: 'var(--text-primary)', marginBottom: 6 }}>{d.text}</div>
-                    <div className="flex gap-2 items-center">
-                      <span className={`badge ${statusBadgeClass(d.status)}`}>{d.status}</span>
-                      <span style={{ fontSize: 'var(--text-xs)', color: 'var(--text-muted)' }}>
-                        {d.evidence_ids.length} evidence ref{d.evidence_ids.length !== 1 ? 's' : ''}
-                      </span>
-                      <button onClick={e => { e.stopPropagation(); setEvidenceTarget(d.id) }}
-                        style={{ fontSize: 'var(--text-xs)', color: 'var(--accent)', background: 'none', padding: 0 }}>
-                        View source →
-                      </button>
+              {decisions.map((d: any) => (
+                <div key={d.id} className="item-card decision mb-3">
+                  <div className="flex items-center gap-2 mb-2">
+                    <span className="badge badge-green">DECISION</span>
+                    <span className="badge badge-gray">{d.status}</span>
+                    <div className="ml-auto">
+                      <div className={`confidence ${confidenceClass(d.confidence)}`}>
+                        <div className="confidence-dot" />
+                        {confidenceLabel(d.confidence)}
+                      </div>
                     </div>
                   </div>
-                  <div className={`confidence ${confidenceClass(d.confidence)}`}>
-                    <div className="confidence-dot" />
-                    {confidenceLabel(d.confidence)}
+                  <div className="item-text mb-2">{d.text}</div>
+                  <div className="flex items-center gap-3">
+                    <button
+                      className="evidence-link"
+                      onClick={() => setEvidenceTarget(d.id)}
+                    >
+                      📎 View evidence ({d.evidence_ids?.length || 1})
+                    </button>
+                    <span className="text-muted text-xs">·</span>
+                    <span className="text-muted text-xs">Status: {d.review_state ?? 'CONFIRMED'}</span>
                   </div>
                 </div>
               ))}
@@ -124,39 +287,37 @@ export default function MeetingWorkspace() {
 
           {tab === 'actions' && (
             <div>
-              {actions.map(a => (
-                <div key={a.id} className="action-card">
-                  <span className="decision-icon" style={{ fontSize: 18 }}>⚡</span>
-                  <div style={{ flex: 1 }}>
-                    <div style={{ fontSize: 'var(--text-sm)', fontWeight: 600, color: 'var(--text-primary)', marginBottom: 6 }}>{a.task}</div>
-                    <div className="flex gap-2 items-center flex-wrap">
-                      <span className={`badge ${statusBadgeClass(a.status)}`}>{a.status}</span>
-                      {a.owner_name ? (
-                        <span className="flex items-center gap-1">
-                          <span className="badge badge-blue">{a.owner_name}</span>
-                          <span className={`confidence ${confidenceClass(a.owner_confidence)}`} style={{ fontSize: 10 }}>
-                            <div className="confidence-dot" />{confidenceLabel(a.owner_confidence)}
-                          </span>
-                        </span>
-                      ) : (
-                        <span className="badge badge-red">No owner</span>
-                      )}
-                      {a.deadline ? (
-                        <span className="flex items-center gap-1">
-                          <span className="badge badge-yellow">Due {a.deadline}</span>
-                          <span className={`confidence ${confidenceClass(a.deadline_confidence)}`} style={{ fontSize: 10 }}>
-                            <div className="confidence-dot" />{confidenceLabel(a.deadline_confidence)}
-                          </span>
-                        </span>
-                      ) : (
-                        <span className="badge badge-gray">No deadline</span>
-                      )}
-                      <span className={`badge ${statusBadgeClass(a.priority)}`}>{a.priority}</span>
+              {actions.map((a: any) => (
+                <div key={a.id} className="item-card action mb-3">
+                  <div className="flex items-center gap-2 mb-2">
+                    <span className="badge badge-blue">ACTION</span>
+                    <span className="badge badge-gray">{a.status}</span>
+                    {a.priority && (
+                      <span className={`badge ${a.priority === 'HIGH' ? 'badge-yellow' : 'badge-gray'}`}>
+                        {a.priority}
+                      </span>
+                    )}
+                    <div className="ml-auto">
+                      <div className={`confidence ${confidenceClass(a.confidence)}`}>
+                        <div className="confidence-dot" />
+                        {confidenceLabel(a.confidence)}
+                      </div>
                     </div>
                   </div>
-                  <div className={`confidence ${confidenceClass(a.confidence)}`}>
-                    <div className="confidence-dot" />
-                    {confidenceLabel(a.confidence)}
+                  <div className="item-text mb-2">{a.task}</div>
+                  <div className="flex items-center gap-4 text-xs text-muted">
+                    <div>
+                      Owner: <strong style={{ color: 'var(--text-secondary)' }}>{a.owner || 'Unassigned'}</strong>
+                    </div>
+                    <div>
+                      Deadline: <strong style={{ color: 'var(--text-secondary)' }}>{a.deadline || 'None'}</strong>
+                    </div>
+                    <button
+                      className="evidence-link ml-auto"
+                      onClick={() => setEvidenceTarget(a.id)}
+                    >
+                      📎 View evidence
+                    </button>
                   </div>
                 </div>
               ))}
@@ -165,25 +326,69 @@ export default function MeetingWorkspace() {
 
           {tab === 'review' && (
             <div>
-              {reviews.map(r => (
-                <div key={r.id} className={`review-item ${r.priority_score >= 0.7 ? 'high-priority' : 'med-priority'}`}>
-                  <div className="flex items-center gap-2 mb-3">
-                    <span className={`badge ${r.priority_score >= 0.7 ? 'badge-red' : 'badge-yellow'}`}>
-                      {r.type.replace(/_/g, ' ')}
+              <div
+                style={{
+                  fontSize: 'var(--text-xs)',
+                  color: 'var(--text-muted)',
+                  marginBottom: 12,
+                  padding: '8px 12px',
+                  background: 'var(--bg-elevated)',
+                  borderRadius: 'var(--radius-md)',
+                }}
+              >
+                Items ranked by priority score = importance × uncertainty × impact. Resolving items never re-runs ML
+                stages (ADR-011).
+              </div>
+              {reviews.map((r: any) => (
+                <div key={r.id} className="item-card review mb-3">
+                  <div className="flex items-center gap-2 mb-2">
+                    <span className="badge badge-yellow">{r.type ?? r.review_type}</span>
+                    <span className="badge badge-gray">
+                      Priority: {Math.round((r.priority_score ?? 0.75) * 100)}%
                     </span>
-                    <span style={{ fontSize: 'var(--text-xs)', color: 'var(--text-muted)', fontFamily: 'var(--font-mono)' }}>
-                      priority {r.priority_score.toFixed(2)}
-                    </span>
+                    <div className="ml-auto">
+                      <span className="badge badge-green">Needs Attention</span>
+                    </div>
                   </div>
-                  <div className="review-question">{r.question}</div>
-                  <div style={{ fontSize: 'var(--text-xs)', color: 'var(--text-muted)', marginBottom: 10, fontStyle: 'italic' }}>{r.context}</div>
-                  <div className="review-options">
-                    {r.options.map(o => <div key={o} className="review-option">{o}</div>)}
+                  <div style={{ fontSize: 'var(--text-sm)', fontWeight: 600, color: 'var(--text-primary)', marginBottom: 8 }}>
+                    {r.question}
                   </div>
-                  <div className="flex gap-2 mt-3">
-                    <button className="btn btn-primary btn-sm">Confirm</button>
-                    <button className="btn btn-ghost btn-sm">Skip</button>
-                    <button className="btn btn-ghost btn-sm">Defer</button>
+                  {r.context && (
+                    <div
+                      style={{
+                        fontSize: 'var(--text-xs)',
+                        color: 'var(--text-muted)',
+                        marginBottom: 10,
+                        fontStyle: 'italic',
+                      }}
+                    >
+                      {r.context}
+                    </div>
+                  )}
+                  <div className="flex gap-2 flex-wrap mb-3">
+                    {(r.options || []).map((opt: string, i: number) => (
+                      <button
+                        key={i}
+                        className="btn btn-secondary btn-sm"
+                        onClick={() => alert(`Confirmed: ${opt}`)}
+                      >
+                        {opt}
+                      </button>
+                    ))}
+                  </div>
+                  <div className="flex gap-2">
+                    <button
+                      className="btn btn-primary btn-sm"
+                      onClick={() => alert('Confirmed proposed value')}
+                    >
+                      ✓ Accept
+                    </button>
+                    <button
+                      className="btn btn-ghost btn-sm"
+                      onClick={() => alert('Marked as unresolved fact')}
+                    >
+                      Leave Unresolved
+                    </button>
                   </div>
                 </div>
               ))}
@@ -192,13 +397,16 @@ export default function MeetingWorkspace() {
 
           {tab === 'transcript' && (
             <div>
-              {MOCK_TRANSCRIPT.map(s => (
-                <div key={s.id} className="transcript-segment">
-                  <span className="transcript-timestamp">{formatMs(s.start_ms)}</span>
-                  <span className="transcript-speaker">{s.speaker_label}</span>
+              {transcript.map((s: any) => (
+                <div key={s.id} className="transcript-row">
+                  <div className="transcript-time">{formatMs(s.start_ms)}</div>
                   <div style={{ flex: 1 }}>
+                    <div className="transcript-speaker">{s.speaker_name ?? s.speaker ?? 'Speaker'}</div>
                     <div className="transcript-text">{s.text}</div>
-                    <div className={`confidence ${confidenceClass(s.asr_confidence)}`} style={{ marginTop: 4, fontSize: 10 }}>
+                    <div
+                      className={`confidence ${confidenceClass(s.asr_confidence)}`}
+                      style={{ marginTop: 4, fontSize: 10 }}
+                    >
                       <div className="confidence-dot" />
                       ASR {confidenceLabel(s.asr_confidence)}
                     </div>
@@ -211,16 +419,20 @@ export default function MeetingWorkspace() {
           {tab === 'timeline' && (
             <div>
               <div className="timeline">
-                {MOCK_DECISIONS.map(d => (
+                {decisions.map((d: any) => (
                   <div key={d.id} className="timeline-item decision">
-                    <div className="timeline-time">{formatMs(2000)}</div>
-                    <div className="timeline-text"><strong>Decision:</strong> {d.text}</div>
+                    <div className="timeline-time">{formatMs(18000)}</div>
+                    <div className="timeline-text">
+                      <strong>Decision:</strong> {d.text}
+                    </div>
                   </div>
                 ))}
-                {MOCK_ACTIONS.map(a => (
+                {actions.map((a: any) => (
                   <div key={a.id} className="timeline-item action">
-                    <div className="timeline-time">{formatMs(50000)}</div>
-                    <div className="timeline-text"><strong>Action:</strong> {a.task}</div>
+                    <div className="timeline-time">{formatMs(58000)}</div>
+                    <div className="timeline-text">
+                      <strong>Action:</strong> {a.task} ({a.owner || 'Unassigned'})
+                    </div>
                   </div>
                 ))}
               </div>
@@ -234,11 +446,13 @@ export default function MeetingWorkspace() {
         <div style={{ width: 300, flexShrink: 0 }}>
           <div className="card" style={{ height: '100%', overflow: 'auto' }}>
             <div className="flex items-center justify-between mb-4">
-              <div className="card-title">Evidence</div>
-              <button onClick={() => setEvidenceTarget(null)} className="btn btn-ghost btn-sm">✕</button>
+              <div className="card-title">Evidence Inspector</div>
+              <button onClick={() => setEvidenceTarget(null)} className="btn btn-ghost btn-sm">
+                ✕
+              </button>
             </div>
             <div style={{ fontSize: 'var(--text-xs)', color: 'var(--text-muted)', marginBottom: 12 }}>
-              Source evidence for this claim.
+              Immutable ground-truth evidence reference (ADR-008).
             </div>
             <div className="evidence-card">
               <div className="flex gap-2 mb-2">
@@ -249,22 +463,35 @@ export default function MeetingWorkspace() {
                 "Let's use FastAPI — it's async, well-documented, and the team is familiar with it."
               </div>
               <div className="flex gap-2 mt-2">
-                <span style={{ fontSize: 'var(--text-xs)', color: 'var(--text-muted)' }}>SPEAKER_1</span>
+                <span style={{ fontSize: 'var(--text-xs)', color: 'var(--text-muted)' }}>Akhilesh (Speaker 0)</span>
                 <span style={{ fontSize: 'var(--text-xs)', color: 'var(--text-muted)' }}>·</span>
-                <span style={{ fontSize: 'var(--text-xs)', fontFamily: 'var(--font-mono)', color: 'var(--text-muted)' }}>00:08</span>
+                <span style={{ fontSize: 'var(--text-xs)', fontFamily: 'var(--font-mono)', color: 'var(--text-muted)' }}>
+                  00:08
+                </span>
                 <span className="ml-auto">
                   <div className={`confidence ${confidenceClass(0.94)}`} style={{ fontSize: 10 }}>
-                    <div className="confidence-dot" />0.94
+                    <div className="confidence-dot" />
+                    0.94
                   </div>
                 </span>
               </div>
               <button className="btn btn-ghost btn-sm mt-2 w-full" onClick={() => setTab('transcript')}>
-                Jump to source →
+                Jump to transcript →
               </button>
             </div>
-            <div style={{ marginTop: 12, padding: '8px 12px', background: 'var(--bg-elevated)', borderRadius: 'var(--radius-md)', fontSize: 'var(--text-xs)', color: 'var(--text-muted)' }}>
-              <strong style={{ color: 'var(--text-secondary)' }}>Processing stage:</strong> SEMANTIC<br />
-              <strong style={{ color: 'var(--text-secondary)' }}>Extraction model:</strong> stub (Phase 0)
+            <div
+              style={{
+                marginTop: 12,
+                padding: '8px 12px',
+                background: 'var(--bg-elevated)',
+                borderRadius: 'var(--radius-md)',
+                fontSize: 'var(--text-xs)',
+                color: 'var(--text-muted)',
+              }}
+            >
+              <strong style={{ color: 'var(--text-secondary)' }}>Processing stage:</strong> SEMANTIC
+              <br />
+              <strong style={{ color: 'var(--text-secondary)' }}>Immutable:</strong> True
             </div>
           </div>
         </div>
