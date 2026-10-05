@@ -11,6 +11,7 @@ from app.config import settings
 from app.database import get_db
 from app.models.capture import CaptureSession, CaptureSource, AudioSourceState
 from app.models.meeting import Meeting, CaptureMode, MeetingLifecycle, ProcessingStatus, PrivacyMode
+from app.pipeline.orchestrator import process_meeting_pipeline
 
 router = APIRouter()
 
@@ -96,29 +97,18 @@ async def upload_file(
 
     await db.commit()
 
-    # Queue processing (Phase 1: real pipeline; Phase 0: placeholder)
-    background_tasks.add_task(_process_meeting_stub, meeting_id, str(audio_path), language)
+    # Queue progressive processing pipeline in background
+    background_tasks.add_task(process_meeting_pipeline, meeting_id, str(audio_path))
 
     return {
         "meeting_id": meeting_id,
         "file_saved": str(audio_path),
         "status": "queued",
-        "message": "File uploaded. Processing will begin shortly.",
+        "message": "File uploaded. Progressive processing pipeline started.",
     }
 
 
 async def _process_meeting_stub(meeting_id: str, audio_path: str, language: str) -> None:
-    """
-    Phase 0 stub: just marks meeting as PROCESSING then COMPLETE.
-    Phase 1 will replace this with the real agent pipeline.
-    """
-    from sqlalchemy import select
-    from app.database import AsyncSessionLocal
-
-    async with AsyncSessionLocal() as db:
-        result = await db.execute(select(Meeting).where(Meeting.id == meeting_id))
-        meeting = result.scalar_one_or_none()
-        if meeting:
-            meeting.processing_status = ProcessingStatus.RUNNING
-            meeting.lifecycle_status = MeetingLifecycle.PROCESSING
-            await db.commit()
+    """Invokes the full progressive processing pipeline."""
+    from app.pipeline.orchestrator import process_meeting_pipeline
+    await process_meeting_pipeline(meeting_id, audio_path)
