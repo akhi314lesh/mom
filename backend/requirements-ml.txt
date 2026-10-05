@@ -1,0 +1,27 @@
+# ML/AI packages — heavy dependencies (torch ~2GB)
+# Install ONLY for Phase 1+ with real ML features
+# pip install -r requirements-ml.txt
+
+# ASR
+openai-whisper==20231117
+# OR: openai>=1.0.0 for Whisper API
+
+# Diarization (Phase 3)
+# pyannote.audio==3.3.2
+# torch>=2.0.0
+# torchaudio>=2.0.0
+
+# LLM providers
+openai>=1.50.0
+anthropic>=0.34.0
+
+# PDF generation
+weasyprint>=62.0
+# fallback: reportlab>=4.0.0
+
+# Audio capture (Phase 4)
+# sounddevice>=0.4.6
+# pywebview>=5.0
+
+# Global hotkeys (Phase 4)
+# keyboard>=0.13.5
