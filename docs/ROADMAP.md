@@ -8,29 +8,29 @@
 ## Implementation Phases
 
 ### Phase 0 — Scaffold + Domain Model + Documentation
-**Status**: 🔄 In Progress  
+**Status**: ✅ Complete  
 **Commit tag**: `feat(phase-0): scaffold, domain model, documentation`
 
 Deliverables:
 - [x] `.gitignore`, `README.md`
 - [x] All 10 architecture documentation files
 - [x] All 10+ ADRs
-- [ ] Backend: FastAPI app, config, SQLAlchemy + Alembic setup
-- [ ] All 22 ORM models
-- [ ] All Pydantic v2 schemas
-- [ ] All adapter interfaces (abstract base classes)
-- [ ] All stub adapter implementations
-- [ ] Frontend: Vite React-TS scaffold
-- [ ] Frontend: Design system (CSS tokens, typography)
-- [ ] Frontend: All page shells with mock data
-- [ ] Frontend: Component shells
+- [x] Backend: FastAPI app, config, SQLAlchemy + Alembic setup
+- [x] All 22 ORM models
+- [x] All Pydantic v2 schemas
+- [x] All adapter interfaces (abstract base classes)
+- [x] All stub adapter implementations
+- [x] Frontend: Vite React-TS scaffold
+- [x] Frontend: Design system (CSS tokens, typography)
+- [x] Frontend: All page shells with mock data
+- [x] Frontend: Component shells
 
 **Validation**: Both servers start. All pages render with mock data. DB schema created.
 
 ---
 
 ### Phase 1 — Core Pipeline + UI
-**Status**: 🔲 Pending  
+**Status**: ✅ Complete  
 **Commit tag**: `feat(phase-1): core pipeline, transcript, semantic extraction, artifacts`
 
 Deliverables:
@@ -51,7 +51,7 @@ Deliverables:
 ---
 
 ### Phase 2 — Evidence + Provenance + Review Queue
-**Status**: 🔲 Pending  
+**Status**: ✅ Complete  
 **Commit tag**: `feat(phase-2): evidence provenance, field confidence, review queue`
 
 Deliverables:
@@ -69,7 +69,7 @@ Deliverables:
 ---
 
 ### Phase 3 — Speaker Diarization + Participant Resolution
-**Status**: 🔲 Pending  
+**Status**: ✅ Complete  
 **Commit tag**: `feat(phase-3): diarization, speaker resolution, participant mapping`
 
 Deliverables:
@@ -83,7 +83,7 @@ Deliverables:
 ---
 
 ### Phase 4 — Desktop Overlay + Mark Moment
-**Status**: 🔲 Pending  
+**Status**: ✅ Complete  
 **Commit tag**: `feat(phase-4): overlay shell, capture controllers, mark moment`
 
 Deliverables:
@@ -101,7 +101,7 @@ Deliverables:
 ---
 
 ### Phase 5 — Live Capture + Semantic Timeline + Contradiction Detection
-**Status**: 🔲 Pending  
+**Status**: ✅ Complete  
 **Commit tag**: `feat(phase-5): live capture, semantic timeline, contradiction detection`
 
 Deliverables:
