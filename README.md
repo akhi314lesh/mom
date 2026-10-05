@@ -75,7 +75,7 @@ npm run dev                     # starts at http://localhost:5173
 
 ## Current Phase
 
-**Phase 4 — Desktop Overlay + Mark Moment + Capture Controllers**
+**Phase 5 — Live Capture + Semantic Timeline + Contradiction Detection**
 
 Features implemented:
 - Full 22 ORM entity models with async SQLite/PostgreSQL layer
@@ -86,7 +86,12 @@ Features implemented:
 - Standalone Desktop Overlay Shell with always-on-top pywebview/browser launcher (`desktop/overlay_launcher.py`)
 - Hardware-adaptive Capture Controllers (`MicCaptureController`, `SystemAudioController`, `ManualEventController`) with graceful degradation to `NO_AUDIO` mode
 - Mark Moment engine (`Ctrl+Shift+M`) generating immutable `Evidence` (`source="HUMAN"`, `confidence=1.0`, `priority=1.0`)
-- Chronological timeline combining user marks, decisions, and action items in real-time via WebSocket
+- Real-time streaming utterance processor (`OVERLAY` mode) with automatic speech segment creation & real-time semantic event triggers
+- Contradiction Detection Engine (`backend/app/pipeline/contradictions.py`) across decisions, deadlines, owners, and factual claims
+- Strict architecture invariant: The system ALWAYS prefers `DECISION UNRESOLVED` (`review_state="UNCERTAIN"`) over silently picking one side of a conflict; both sides are preserved in immutable `Evidence`
+- Cross-meeting continuity & contradiction detection (`is_cross_meeting=True`)
+- Human arbitration workflow (`PATCH /api/contradictions/{id}/resolve`) creating high-confidence correction `Evidence`, updating decisions to `CONFIRMED`/`OVERRIDDEN`, and marking artifacts `STALE`
+- Frontend Semantic Event Timeline with filter chips (`All`, `Decisions`, `Actions`, `Contradictions & Flags`, `Marks`), dual-claim dispute cards, and instant arbitration buttons
 
 See [CAPABILITIES.md](docs/CAPABILITIES.md) for what is currently operational.
 

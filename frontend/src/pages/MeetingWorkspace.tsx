@@ -77,6 +77,20 @@ export default function MeetingWorkspace() {
               }
             })
           }
+          if (msg.type === 'CONTRADICTION_DETECTED' && msg.contradiction) {
+            setLiveRecord((prev: any) => {
+              if (!prev) return prev
+              const existing = prev.contradictions || []
+              if (existing.some((c: any) => c.id === msg.contradiction.id)) return prev
+              return {
+                ...prev,
+                contradictions: [...existing, msg.contradiction],
+              }
+            })
+          }
+          if (msg.type === 'CONTRADICTION_RESOLVED' || msg.type === 'LIVE_UTTERANCE_PROCESSED') {
+            fetchRecord()
+          }
         } catch {}
       }
     } catch {}
@@ -90,6 +104,8 @@ export default function MeetingWorkspace() {
   const mockMeeting = MOCK_MEETINGS.find((m) => m.id === id) ?? MOCK_MEETINGS[0]
   const meeting = liveRecord?.meeting ?? mockMeeting
 
+  const [timelineFilter, setTimelineFilter] = useState<'ALL' | 'DECISIONS' | 'ACTIONS' | 'CONTRADICTIONS' | 'MARKS'>('ALL')
+
   const decisions =
     liveRecord?.decisions && liveRecord.decisions.length > 0
       ? liveRecord.decisions
@@ -101,6 +117,8 @@ export default function MeetingWorkspace() {
       : MOCK_ACTIONS.filter((a) => a.originating_meeting_id === meeting.id || meeting.id === 'mtg-001')
 
   const userMarks = liveRecord?.user_marks ?? []
+  const contradictions = liveRecord?.contradictions ?? []
+  const semanticEvents = liveRecord?.semantic_events ?? []
 
   const transcript =
     liveRecord?.transcript && liveRecord.transcript.length > 0
@@ -152,11 +170,43 @@ export default function MeetingWorkspace() {
     } catch {}
   }
 
+  const handleResolveContradiction = async (contradictionId: string, resolution: string, chosenSide?: string) => {
+    try {
+      const res = await fetch(`http://localhost:8000/api/contradictions/${contradictionId}/resolve`, {
+        method: 'PATCH',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ resolution, chosen_side: chosenSide }),
+      })
+      if (res.ok) {
+        const recRes = await fetch(`http://localhost:8000/api/meetings/${meeting.id}/record`)
+        if (recRes.ok) {
+          const data = await recRes.json()
+          setLiveRecord(data)
+        }
+      }
+    } catch (err) {
+      console.error('Failed to resolve contradiction', err)
+    }
+  }
+
   // Selected evidence lookup
   const selectedEvidence = (() => {
     if (!evidenceTarget) return null
 
-    // Check user marks first
+    // Check contradictions first
+    const conMatch = contradictions.find((c: any) => c.id === evidenceTarget)
+    if (conMatch) {
+      return {
+        source_type: 'CONTRADICTION',
+        source_modality: 'CROSS_EXAMINATION',
+        raw_text: `${conMatch.description} [Side A: ${conMatch.event_a_text || 'Claim A'} | Side B: ${conMatch.event_b_text || 'Claim B'}]`,
+        confidence: conMatch.confidence,
+        timestamp_ms: 18500,
+        speaker: 'Multi-party Discussion / Conflict',
+      }
+    }
+
+    // Check user marks
     const markMatch = userMarks.find((m: any) => m.id === evidenceTarget)
     if (markMatch) {
       const evMatch = (liveRecord?.evidence || []).find(
@@ -310,6 +360,71 @@ export default function MeetingWorkspace() {
             })}
           </div>
         </div>
+
+        {/* Contradiction / Conflict Alert Banner */}
+        {contradictions.filter((c: any) => c.review_state !== 'RESOLVED').length > 0 && (
+          <div
+            className="mb-4"
+            style={{
+              padding: '14px 16px',
+              borderRadius: 'var(--radius-lg)',
+              background: 'rgba(239, 68, 68, 0.12)',
+              border: '1px solid rgba(239, 68, 68, 0.4)',
+              boxShadow: '0 4px 16px rgba(239, 68, 68, 0.15)',
+            }}
+          >
+            <div className="flex items-center gap-2 mb-2">
+              <span style={{ fontSize: 16 }}>⚠️</span>
+              <span style={{ fontSize: 'var(--text-sm)', fontWeight: 700, color: 'var(--red)' }}>
+                {contradictions.filter((c: any) => c.review_state !== 'RESOLVED').length} Unresolved Contradiction(s) Detected
+              </span>
+              <span className="badge badge-red ml-auto">Human Arbitration Required</span>
+            </div>
+            <div style={{ fontSize: 'var(--text-xs)', color: 'var(--text-secondary)', marginBottom: 12 }}>
+              System Invariant: Decisions are held as <strong>UNRESOLVED</strong> rather than silently choosing a side. Both viewpoints are preserved in evidence.
+            </div>
+            {contradictions
+              .filter((c: any) => c.review_state !== 'RESOLVED')
+              .map((c: any) => (
+                <div
+                  key={c.id}
+                  style={{
+                    background: 'var(--bg-surface)',
+                    border: '1px solid var(--border)',
+                    borderRadius: 'var(--radius-md)',
+                    padding: '12px 14px',
+                    marginBottom: 8,
+                  }}
+                >
+                  <div className="flex items-center gap-2 mb-1">
+                    <span className="badge badge-red">{c.contradiction_type} CONFLICT</span>
+                    <span style={{ fontSize: 'var(--text-xs)', fontWeight: 600 }}>{c.description}</span>
+                  </div>
+                  <div className="flex gap-2 mt-3">
+                    <button
+                      className="btn btn-secondary btn-sm"
+                      onClick={() => handleResolveContradiction(c.id, `Accepted: ${c.event_a_text || 'Claim A'}`, 'A')}
+                    >
+                      ✓ Accept: {c.event_a_text ? c.event_a_text.slice(0, 32) + '...' : 'Claim A'}
+                    </button>
+                    <button
+                      className="btn btn-secondary btn-sm"
+                      onClick={() => handleResolveContradiction(c.id, `Accepted: ${c.event_b_text || 'Claim B'}`, 'B')}
+                    >
+                      ✓ Accept: {c.event_b_text ? c.event_b_text.slice(0, 32) + '...' : 'Claim B'}
+                    </button>
+                    <button
+                      className="evidence-link ml-auto"
+                      style={{ fontSize: 11 }}
+                      onClick={() => setEvidenceTarget(c.id)}
+                    >
+                      📎 Inspect Evidence
+                    </button>
+                  </div>
+                </div>
+              ))}
+          </div>
+        )}
 
         {/* Tab navigation */}
         <div className="tab-nav mb-4" style={{ flexShrink: 0 }}>
@@ -530,32 +645,55 @@ export default function MeetingWorkspace() {
 
           {tab === 'timeline' && (
             <div>
+              {/* Timeline Header Info & Filter Chips */}
               <div
-                className="flex items-center justify-between mb-4 p-3"
+                className="mb-4 p-3"
                 style={{
                   background: 'var(--bg-elevated)',
                   borderRadius: 'var(--radius-md)',
                   border: '1px solid var(--border)',
                 }}
               >
-                <div style={{ fontSize: 'var(--text-xs)', color: 'var(--text-secondary)' }}>
-                  Chronological Timeline: Decisions, Actions, and Live Marked Moments (Ctrl+Shift+M).
+                <div className="flex items-center justify-between mb-3">
+                  <div style={{ fontSize: 'var(--text-xs)', color: 'var(--text-secondary)' }}>
+                    Chronological Timeline: Decisions, Actions, Contradictions, and Live Marked Moments.
+                  </div>
+                  <button
+                    className="btn btn-primary btn-sm"
+                    onClick={() =>
+                      window.open(
+                        `/overlay/${meeting.id}`,
+                        'MoMOverlay',
+                        'width=440,height=680,top=100,left=100,resizable=yes'
+                      )
+                    }
+                  >
+                    ⚡ Open Overlay
+                  </button>
                 </div>
-                <button
-                  className="btn btn-primary btn-sm"
-                  onClick={() =>
-                    window.open(
-                      `/overlay/${meeting.id}`,
-                      'MoMOverlay',
-                      'width=440,height=680,top=100,left=100,resizable=yes'
-                    )
-                  }
-                >
-                  ⚡ Open Overlay
-                </button>
+
+                {/* Filter Chips */}
+                <div className="flex gap-2 flex-wrap">
+                  {[
+                    { key: 'ALL', label: `All Events (${decisions.length + actions.length + userMarks.length + contradictions.length + semanticEvents.length})` },
+                    { key: 'DECISIONS', label: `Decisions (${decisions.length})` },
+                    { key: 'ACTIONS', label: `Actions (${actions.length})` },
+                    { key: 'CONTRADICTIONS', label: `Contradictions & Flags (${contradictions.length + semanticEvents.filter((s: any) => s.event_type === 'DISAGREEMENT').length})` },
+                    { key: 'MARKS', label: `User Marks (${userMarks.length})` },
+                  ].map((filter) => (
+                    <button
+                      key={filter.key}
+                      className={`btn btn-sm ${timelineFilter === filter.key ? 'btn-primary' : 'btn-ghost'}`}
+                      style={{ fontSize: 11, padding: '4px 10px' }}
+                      onClick={() => setTimelineFilter(filter.key as any)}
+                    >
+                      {filter.label}
+                    </button>
+                  ))}
+                </div>
               </div>
 
-              {decisions.length === 0 && actions.length === 0 && userMarks.length === 0 ? (
+              {decisions.length === 0 && actions.length === 0 && userMarks.length === 0 && contradictions.length === 0 && semanticEvents.length === 0 ? (
                 <div
                   style={{
                     padding: '32px 16px',
@@ -590,6 +728,7 @@ export default function MeetingWorkspace() {
                       text: d.text,
                       author: 'AI Extracted',
                       confidence: d.confidence,
+                      status: d.status,
                     })),
                     ...actions.map((a: any) => ({
                       id: a.id,
@@ -601,15 +740,51 @@ export default function MeetingWorkspace() {
                       author: 'AI Extracted',
                       confidence: a.confidence,
                     })),
+                    ...contradictions.map((c: any) => ({
+                      id: c.id,
+                      kind: 'CONTRADICTION',
+                      type: c.contradiction_type,
+                      time_ms: 22000,
+                      title: `CONTRADICTION: ${c.contradiction_type}`,
+                      text: c.description,
+                      author: 'Consistency Engine',
+                      confidence: c.confidence,
+                      contradiction: c,
+                    })),
+                    ...semanticEvents
+                      .filter((se: any) => se.event_type === 'DISAGREEMENT')
+                      .map((se: any) => ({
+                        id: se.id,
+                        kind: 'DISAGREEMENT',
+                        type: 'DISAGREEMENT',
+                        time_ms: se.start_ms || 15000,
+                        title: 'DISAGREEMENT',
+                        text: se.text,
+                        author: 'Discussion Participant',
+                        confidence: se.confidence,
+                      })),
                   ]
+                    .filter((item) => {
+                      if (timelineFilter === 'DECISIONS') return item.kind === 'DECISION'
+                      if (timelineFilter === 'ACTIONS') return item.kind === 'ACTION'
+                      if (timelineFilter === 'CONTRADICTIONS') return item.kind === 'CONTRADICTION' || item.kind === 'DISAGREEMENT'
+                      if (timelineFilter === 'MARKS') return item.kind === 'USER_MARK'
+                      return true
+                    })
                     .sort((a, b) => a.time_ms - b.time_ms)
-                    .map((item) => {
+                    .map((item: any) => {
                       let itemClass = 'timeline-item'
                       let badgeClass = 'badge-blue'
-                      if (item.kind === 'DECISION' || item.type === 'DECISION') {
+                      if (item.kind === 'CONTRADICTION') {
                         itemClass = 'timeline-item decision'
-                        badgeClass = 'badge-green'
-                      } else if (item.kind === 'ACTION' || item.type === 'ACTION') {
+                        badgeClass = 'badge-red'
+                      } else if (item.kind === 'DISAGREEMENT') {
+                        itemClass = 'timeline-item'
+                        badgeClass = 'badge-red'
+                      } else if (item.kind === 'DECISION') {
+                        itemClass = 'timeline-item decision'
+                        badgeClass = item.status === 'UNRESOLVED' ? 'badge-yellow' : 'badge-green'
+                      } else if (item.kind === 'ACTION') {
                         itemClass = 'timeline-item action'
                         badgeClass = 'badge-blue'
                       } else if (item.type === 'FLAG') {
@@ -621,7 +796,14 @@ export default function MeetingWorkspace() {
                       }
 
                       return (
-                        <div key={item.id} className={itemClass} style={{ position: 'relative' }}>
+                        <div
+                          key={item.id}
+                          className={itemClass}
+                          style={{
+                            position: 'relative',
+                            borderLeft: item.kind === 'CONTRADICTION' ? '3px solid var(--red)' : undefined,
+                          }}
+                        >
                           <div className="flex items-center gap-2 mb-1">
                             <div className="timeline-time">{formatMs(item.time_ms)}</div>
                             <span className={`badge ${badgeClass}`} style={{ fontSize: 10 }}>
@@ -630,6 +812,11 @@ export default function MeetingWorkspace() {
                             {item.author === 'HUMAN' && (
                               <span className="badge badge-yellow" style={{ fontSize: 9 }}>
                                 👤 HUMAN (Pri: {item.priority ?? 1.0})
+                              </span>
+                            )}
+                            {item.status === 'UNRESOLVED' && (
+                              <span className="badge badge-yellow" style={{ fontSize: 9 }}>
+                                ⚠️ UNRESOLVED
                               </span>
                             )}
                             <div className="ml-auto">
@@ -645,6 +832,39 @@ export default function MeetingWorkspace() {
                           <div className="timeline-text" style={{ fontSize: 'var(--text-xs)', marginTop: 2 }}>
                             {item.text}
                           </div>
+
+                          {/* Specific Arbitration Bar for Contradiction Items */}
+                          {item.kind === 'CONTRADICTION' && item.contradiction && item.contradiction.review_state !== 'RESOLVED' && (
+                            <div
+                              style={{
+                                marginTop: 8,
+                                padding: '8px 10px',
+                                background: 'var(--bg-elevated)',
+                                borderRadius: 'var(--radius-md)',
+                                border: '1px solid rgba(239, 68, 68, 0.3)',
+                              }}
+                            >
+                              <div style={{ fontSize: 10, color: 'var(--text-muted)', marginBottom: 6 }}>
+                                Arbitrate this dispute:
+                              </div>
+                              <div className="flex gap-2">
+                                <button
+                                  className="btn btn-secondary btn-sm"
+                                  style={{ fontSize: 10, padding: '2px 8px' }}
+                                  onClick={() => handleResolveContradiction(item.contradiction.id, `Accepted: ${item.contradiction.event_a_text || 'Claim A'}`, 'A')}
+                                >
+                                  Accept Claim A
+                                </button>
+                                <button
+                                  className="btn btn-secondary btn-sm"
+                                  style={{ fontSize: 10, padding: '2px 8px' }}
+                                  onClick={() => handleResolveContradiction(item.contradiction.id, `Accepted: ${item.contradiction.event_b_text || 'Claim B'}`, 'B')}
+                                >
+                                  Accept Claim B
+                                </button>
+                              </div>
+                            </div>
+                          )}
                         </div>
                       )
                     })}

@@ -1,23 +1,28 @@
 # CAPABILITIES.md
 
-> **Version**: 1.0 (Phase 0)  
+> **Version**: 5.0 (Phase 5)  
 > **Last updated**: 2026-10-04  
-> **Current Phase**: 0 — Scaffold
+> **Current Phase**: 5 — Live Capture + Semantic Timeline + Contradiction Detection
 
 ---
 
-## Currently Operational (Phase 0)
+## Currently Operational (Phase 5)
 
 | Capability | Status | Notes |
 |---|---|---|
-| Repository structure | ✅ Complete | Backend + frontend + docs |
-| Domain model (22 entities) | ✅ Defined | DB schema not yet created |
-| Architecture documentation | ✅ Complete | All 10 docs + 10 ADRs |
-| Provider adapter interfaces | ✅ Defined | ASR, Diarization, LLM |
-| Stub adapters | ✅ Defined | Enables dev without ML stack |
-| Frontend page shells | ✅ Scaffold | No real data yet |
-| Backend API endpoints | 🔲 Skeleton | Handlers not yet implemented |
-| DB schema migration | 🔲 Pending | Alembic setup Phase 1 |
+| Repository structure | ✅ Complete | Backend + frontend + desktop + docs |
+| Domain model (22 entities) | ✅ Complete | Async SQLite/PostgreSQL schema active |
+| Progressive Processing Pipeline | ✅ Complete | 7-stage engine with quality metrics & provenance |
+| Evidence Provenance Chain | ✅ Complete | Immutable evidence, human correction engine |
+| DOCX Artifact Generation | ✅ Complete | python-docx from canonical MeetingRecord, staleness tracking |
+| People Directory & Resolution | ✅ Complete | Speaker clustering, aliases, participant mapping |
+| Desktop Overlay Shell | ✅ Complete | PyWebView always-on-top + WASD/hotkey Mark Moment |
+| Audio Capture Controllers | ✅ Complete | sounddevice mic + WASAPI + manual fallback |
+| Live Speech & Utterance Processing | ✅ Complete | Real-time speech chunk ingestion & semantic event triggers |
+| Contradiction Detection Engine | ✅ Complete | Within-meeting & cross-meeting conflict detection |
+| Decision Unresolved Invariant | ✅ Complete | Strict non-arbitrary invariant: flags UNRESOLVED, preserves both claims |
+| Human Arbitration Flow | ✅ Complete | Resolves conflicts with immutable HUMAN evidence, recalculates staleness |
+| Semantic Timeline & Dispute Cards | ✅ Complete | Rich filterable timeline with dispute resolution controls |
 
 ---
 

@@ -87,6 +87,8 @@ async def get_meeting_record(meeting_id: str, db: AsyncSession = Depends(get_db)
     from app.models.artifacts import Artifact
     from app.models.evidence import Evidence
     from app.models.marks import UserMark
+    from app.models.contradictions import Contradiction
+    from app.models.semantic import SemanticEvent
 
     meeting = await _get_or_404(meeting_id, db)
 
@@ -105,6 +107,12 @@ async def get_meeting_record(meeting_id: str, db: AsyncSession = Depends(get_db)
     evs_res = await db.execute(select(Evidence).where(Evidence.meeting_id == meeting_id))
     marks_res = await db.execute(
         select(UserMark).where(UserMark.meeting_id == meeting_id).order_by(UserMark.timestamp_ms)
+    )
+    cons_res = await db.execute(select(Contradiction).where(Contradiction.meeting_id == meeting_id))
+    sems_res = await db.execute(
+        select(SemanticEvent)
+        .where(SemanticEvent.meeting_id == meeting_id)
+        .order_by(SemanticEvent.start_ms)
     )
 
     participants = parts_res.scalars().all()
@@ -224,6 +232,36 @@ async def get_meeting_record(meeting_id: str, db: AsyncSession = Depends(get_db)
         for m in marks_res.scalars().all()
     ]
 
+    contradictions_list = [
+        {
+            "id": c.id,
+            "meeting_id": c.meeting_id,
+            "contradiction_type": c.contradiction_type,
+            "description": c.description,
+            "event_a_id": c.event_a_id,
+            "event_b_id": c.event_b_id,
+            "is_cross_meeting": c.is_cross_meeting,
+            "review_state": c.review_state,
+            "confidence": c.confidence,
+        }
+        for c in cons_res.scalars().all()
+    ]
+
+    semantic_events_list = [
+        {
+            "id": se.id,
+            "meeting_id": se.meeting_id,
+            "event_type": se.event_type,
+            "text": se.text,
+            "start_ms": se.start_ms,
+            "end_ms": se.end_ms,
+            "confidence": se.confidence,
+            "review_state": se.review_state,
+            "evidence_ids": se.evidence_ids,
+        }
+        for se in sems_res.scalars().all()
+    ]
+
     return {
         "meeting": _meeting_summary(meeting),
         "participants": [{"id": p.id, "name": p.name, "role": p.role} for p in participants],
@@ -240,6 +278,8 @@ async def get_meeting_record(meeting_id: str, db: AsyncSession = Depends(get_db)
         "transcript": transcript_list,
         "evidence": evidence_list,
         "user_marks": user_marks_list,
+        "contradictions": contradictions_list,
+        "semantic_events": semantic_events_list,
         "decisions": decisions_list,
         "action_items": actions_list,
         "questions": questions_list,

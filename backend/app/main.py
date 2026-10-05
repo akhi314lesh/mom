@@ -54,6 +54,7 @@ from app.api import (  # noqa: E402
     artifacts,
     query,
     agent_console,
+    contradictions,
     ws,
 )
 
@@ -66,6 +67,7 @@ app.include_router(evidence.router, prefix="/api/evidence", tags=["Evidence"])
 app.include_router(review.router, prefix="/api/review", tags=["Review"])
 app.include_router(actions.router, prefix="/api/actions", tags=["Actions"])
 app.include_router(decisions.router, prefix="/api/decisions", tags=["Decisions"])
+app.include_router(contradictions.router, prefix="/api/contradictions", tags=["Contradictions"])
 app.include_router(knowledge.router, prefix="/api/knowledge", tags=["Knowledge"])
 app.include_router(artifacts.router, prefix="/api/artifacts", tags=["Artifacts"])
 app.include_router(query.router, prefix="/api/query", tags=["Query"])

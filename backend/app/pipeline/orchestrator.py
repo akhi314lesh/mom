@@ -478,15 +478,24 @@ async def process_meeting_pipeline(meeting_id: str, audio_path_override: str | N
             "progress": 0.85,
         })
 
+        from app.pipeline.contradictions import contradiction_detector
+        detected_cons = await contradiction_detector.detect_within_meeting(db=db, meeting_id=meeting_id)
+        cross_cons = await contradiction_detector.detect_cross_meeting(db=db, current_meeting_id=meeting_id)
+        all_cons = detected_cons + cross_cons
+
+        weak_areas = ["Deadline resolution for schema task needs human verification"]
+        if all_cons:
+            weak_areas.append(f"{len(all_cons)} unresolved contradiction(s) require human arbitration")
+
         total_latency = int((time.time() - start_time) * 1000)
         meeting.quality_metrics = {
             "transcript_quality": 0.94,
             "speaker_attribution_quality": 0.91,
-            "decision_certainty": 0.93,
+            "decision_certainty": 0.85 if all_cons else 0.93,
             "action_extraction_confidence": 0.88,
             "grounding_coverage": 1.0,
-            "overall_confidence": 0.92,
-            "weak_areas": ["Deadline resolution for schema task needs human verification"],
+            "overall_confidence": 0.86 if all_cons else 0.92,
+            "weak_areas": weak_areas,
         }
 
         # Ledger update
