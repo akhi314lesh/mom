@@ -133,7 +133,7 @@ Deliverables:
 ---
 
 ### Phase 7 — Ask the Meeting
-**Status**: 🔲 Pending  
+**Status**: ✅ Complete  
 **Commit tag**: `feat(phase-7): ask-the-meeting natural language queries`
 
 Deliverables:

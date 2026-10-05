@@ -1,12 +1,12 @@
 # CAPABILITIES.md
 
-> **Version**: 6.0 (Phase 6)  
-> **Last updated**: 2026-10-04  
-> **Current Phase**: 6 — Meeting Continuity + Memory + Terminology
+> **Version**: 7.0 (Phase 7)  
+> **Last updated**: 2026-10-05  
+> **Current Phase**: 7 — Ask the Meeting (Natural Language Queries + Evidence Grounding)
 
 ---
 
-## Currently Operational (Phase 5)
+## Currently Operational (Phase 7)
 
 | Capability | Status | Notes |
 |---|---|---|
@@ -28,6 +28,10 @@
 | Terminology Dictionary | ✅ Complete | Auto-detected domain terms & acronyms, aliases, verification API |
 | People Directory & History | ✅ Complete | Cross-meeting participation, speaking metrics, assigned action tracker |
 | Knowledge Base UI | ✅ Complete | 4-tab interface for Knowledge, Terminology, Actions, Contradictions |
+| Natural Language Query Engine | ✅ Complete | Intent classification (`ACTION_OWNER`, `DECISION_STATUS`, `CONTRADICTION`, `TIMELINE`, `FACTUAL`) |
+| Strict Evidence Grounding | ✅ Complete | Zero-hallucination invariant, grounded=False & confidence=0.0 when evidence missing |
+| Verifiable Answer Citations | ✅ Complete | `AnswerSource[]` links to TranscriptSegments, Decisions, Actions, Contradictions, Marks |
+| Ask the Meeting UI Tab | ✅ Complete | Workspace query panel with suggested question chips, grounded badge, clickable evidence citation cards |
 
 ---
 

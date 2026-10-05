@@ -12,7 +12,7 @@ import {
   statusBadgeClass,
 } from '../mockData'
 
-type Tab = 'transcript' | 'decisions' | 'actions' | 'review' | 'timeline'
+type Tab = 'transcript' | 'decisions' | 'actions' | 'review' | 'timeline' | 'query'
 
 export default function MeetingWorkspace() {
   const { id } = useParams<{ id: string }>()
@@ -186,6 +186,31 @@ export default function MeetingWorkspace() {
       }
     } catch (err) {
       console.error('Failed to resolve contradiction', err)
+    }
+  }
+
+  const [nlQuery, setNlQuery] = useState('')
+  const [nlAnswer, setNlAnswer] = useState<any>(null)
+  const [queryLoading, setQueryLoading] = useState(false)
+
+  const handleAskMeeting = async (customQuery?: string) => {
+    const q = customQuery || nlQuery
+    if (!q.trim()) return
+    setQueryLoading(true)
+    try {
+      const res = await fetch(`http://localhost:8000/api/query/meeting/${meeting.id}`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ query: q }),
+      })
+      if (res.ok) {
+        const data = await res.json()
+        setNlAnswer(data)
+      }
+    } catch (err) {
+      console.error('Failed to query meeting', err)
+    } finally {
+      setQueryLoading(false)
     }
   }
 
@@ -448,6 +473,9 @@ export default function MeetingWorkspace() {
           </button>
           <button className={`tab-btn ${tab === 'timeline' ? 'active' : ''}`} onClick={() => setTab('timeline')}>
             Timeline ({decisions.length + actions.length + userMarks.length})
+          </button>
+          <button className={`tab-btn ${tab === 'query' ? 'active' : ''}`} onClick={() => setTab('query')}>
+            💬 Ask Meeting
           </button>
         </div>
 
@@ -868,6 +896,164 @@ export default function MeetingWorkspace() {
                         </div>
                       )
                     })}
+                </div>
+              )}
+            </div>
+          )}
+
+          {tab === 'query' && (
+            <div style={{ display: 'flex', flexDirection: 'column', gap: 16 }}>
+              {/* Question Input Card */}
+              <div className="card">
+                <div className="card-title mb-2">Ask the Meeting</div>
+                <div style={{ fontSize: 'var(--text-xs)', color: 'var(--text-muted)', marginBottom: 12 }}>
+                  Natural language question answering with strict evidence grounding (Phase 7). Every answer cites supporting quotes and evidence IDs.
+                </div>
+                <div className="flex gap-2 mb-3">
+                  <input
+                    type="text"
+                    className="input flex-1"
+                    placeholder="e.g. Who agreed to handle authentication?"
+                    value={nlQuery}
+                    onChange={(e) => setNlQuery(e.target.value)}
+                    onKeyDown={(e) => {
+                      if (e.key === 'Enter') handleAskMeeting()
+                    }}
+                    style={{
+                      padding: '8px 12px',
+                      background: 'var(--bg-elevated)',
+                      border: '1px solid var(--border)',
+                      borderRadius: 'var(--radius-md)',
+                      color: 'var(--text-primary)',
+                      fontSize: 'var(--text-xs)',
+                    }}
+                  />
+                  <button
+                    className="btn btn-primary btn-sm"
+                    disabled={queryLoading || !nlQuery.trim()}
+                    onClick={() => handleAskMeeting()}
+                  >
+                    {queryLoading ? 'Searching...' : '⚡ Ask'}
+                  </button>
+                </div>
+
+                {/* Suggested Query Chips */}
+                <div className="flex gap-2 flex-wrap items-center">
+                  <span style={{ fontSize: 10, color: 'var(--text-muted)' }}>Suggestions:</span>
+                  {[
+                    'Who agreed to handle authentication?',
+                    'What framework decisions were made?',
+                    'Were there any disagreements or conflicts?',
+                    'What are the high priority action items?',
+                  ].map((suggestion) => (
+                    <button
+                      key={suggestion}
+                      className="btn btn-secondary btn-xs"
+                      style={{ fontSize: 10, padding: '3px 8px' }}
+                      onClick={() => {
+                        setNlQuery(suggestion)
+                        handleAskMeeting(suggestion)
+                      }}
+                    >
+                      {suggestion}
+                    </button>
+                  ))}
+                </div>
+              </div>
+
+              {/* Answer Card */}
+              {nlAnswer && (
+                <div
+                  className="card"
+                  style={{
+                    borderLeft: nlAnswer.grounded ? '4px solid var(--success)' : '4px solid var(--yellow)',
+                  }}
+                >
+                  <div className="flex items-center gap-2 mb-3">
+                    {nlAnswer.grounded ? (
+                      <span className="badge badge-green">✓ Grounded in Evidence</span>
+                    ) : (
+                      <span className="badge badge-yellow">⚠️ No Supporting Evidence Found</span>
+                    )}
+                    <span className="badge badge-blue">{nlAnswer.query_type}</span>
+                    <span style={{ marginLeft: 'auto', fontSize: 11, color: 'var(--text-muted)', fontFamily: 'var(--font-mono)' }}>
+                      Confidence: {Math.round(nlAnswer.confidence * 100)}%
+                    </span>
+                  </div>
+
+                  <div
+                    style={{
+                      fontSize: 'var(--text-sm)',
+                      fontWeight: 600,
+                      color: 'var(--text-primary)',
+                      lineHeight: 1.5,
+                      marginBottom: 16,
+                    }}
+                  >
+                    {nlAnswer.answer}
+                  </div>
+
+                  {/* Sources List */}
+                  {nlAnswer.sources && nlAnswer.sources.length > 0 && (
+                    <div>
+                      <div
+                        style={{
+                          fontSize: 10,
+                          fontWeight: 700,
+                          textTransform: 'uppercase',
+                          color: 'var(--text-muted)',
+                          marginBottom: 8,
+                        }}
+                      >
+                        Retrieved Evidence Sources ({nlAnswer.sources.length})
+                      </div>
+                      <div className="flex flex-col gap-2">
+                        {nlAnswer.sources.map((s: any, idx: number) => (
+                          <div
+                            key={idx}
+                            style={{
+                              padding: '10px 12px',
+                              background: 'var(--bg-elevated)',
+                              borderRadius: 'var(--radius-sm)',
+                              border: '1px solid var(--border)',
+                              fontSize: 'var(--text-xs)',
+                            }}
+                          >
+                            <div className="flex items-center gap-2 mb-1">
+                              <span className="badge badge-gray" style={{ fontSize: 9 }}>
+                                [{s.source_type}]
+                              </span>
+                              {s.speaker_name && (
+                                <span style={{ fontSize: 10, color: 'var(--accent)' }}>
+                                  👤 {s.speaker_name}
+                                </span>
+                              )}
+                              {s.meeting_title && (
+                                <span style={{ fontSize: 10, color: 'var(--text-muted)' }}>
+                                  Meeting: {s.meeting_title}
+                                </span>
+                              )}
+                              <span style={{ marginLeft: 'auto', fontSize: 10, color: 'var(--text-muted)' }}>
+                                {Math.round(s.confidence * 100)}% confidence
+                              </span>
+                            </div>
+                            <div style={{ color: 'var(--text-secondary)', fontStyle: 'italic', marginTop: 4 }}>
+                              "{s.quote}"
+                            </div>
+                            <div className="mt-2 flex">
+                              <button
+                                className="evidence-link"
+                                style={{ fontSize: 10 }}
+                                onClick={() => setEvidenceTarget(s.source_id)}
+                              >
+                                📎 Inspect Evidence Reference
+                              </button>
+                            </div>
+                          </div>
+                        ))}
+                      </div>
+                    </div>
+                  )}
                 </div>
               )}
             </div>

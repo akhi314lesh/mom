@@ -75,7 +75,7 @@ npm run dev                     # starts at http://localhost:5173
 
 ## Current Phase
 
-**Phase 6 — Meeting Continuity + Memory + Terminology**
+**Phase 7 — Ask the Meeting (Natural Language Queries + Evidence Grounding)**
 
 Features implemented:
 - Full 22 ORM entity models with async SQLite/PostgreSQL layer
@@ -93,6 +93,10 @@ Features implemented:
 - Terminology dictionary engine & UI: auto-detects technical terms & acronyms, tracks source meetings, supports human verification and custom term additions
 - People Directory with cross-meeting intelligence (`/api/people/directory`): aggregated speaking times, open vs completed task counts, resolved speaker aliases, and complete meeting attendance history
 - Knowledge Base UI (`frontend/src/pages/Knowledge.tsx`): 4-tab command center for Knowledge Base, Terminology Dictionary, Cross-Meeting Actions, and Decision Reversals
+- Natural Language Query Engine (`backend/app/pipeline/query_engine.py`): classifies query intents (`ACTION_OWNER`, `DECISION_STATUS`, `CONTRADICTION`, `TIMELINE`, `FACTUAL`, `GENERAL`), performs multi-modal evidence retrieval across transcript segments, decisions, actions, user marks, and contradictions
+- Strict Evidence Grounding Invariant: Every answer is strictly grounded in retrieved evidence; ungrounded questions return `grounded=False`, `confidence=0.0`, with explicit statement of missing evidence (zero hallucination)
+- Structured `MeetingQueryAnswer` schema with rich `AnswerSource[]` citations
+- Interactive "Ask the Meeting" UI in `MeetingWorkspace.tsx`: instant query bar, suggested question chips, grounded status badges, and clickable citation links to inspect evidence
 
 See [CAPABILITIES.md](docs/CAPABILITIES.md) for what is currently operational.
 

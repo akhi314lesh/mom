@@ -181,9 +181,8 @@ async def run_phase6_tests():
         # Run Continuity Resolver
         print(" -> Running ContinuityResolver.resolve_meeting_continuity...")
         updates = await continuity_resolver.resolve_meeting_continuity(db, m2_id)
-        assert len(updates) > 0, "Continuity resolver should detect the status update from Meeting 2"
-        up = updates[0]
-        assert up["action_id"] == act1.id
+        up = next((u for u in updates if u["action_id"] == act1.id), None)
+        assert up is not None, f"Update for action {act1.id} should be present in updates"
         assert up["new_status"] == ActionItemStatus.COMPLETED
         assert up["last_updated_meeting_id"] == m2_id
 
